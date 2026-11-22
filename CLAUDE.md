@@ -1,3 +1,42 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Projeto: Palantír — Personal Knowledge Agent
+
+Transforma conversas dispersas (grupos e contatos do WhatsApp, incluindo áudios transcritos) em uma base de conhecimento pesquisável, consultada pelo próprio WhatsApp. Visão completa e blueprint v0.1 em `ChatGPT-Ideacao.md`.
+
+Princípios de produto:
+- **WhatsApp-first, not WhatsApp-only**: o adaptador de captura/interface deve ser substituível sem alterar o núcleo de conhecimento.
+- **Knowledge-first, not chatbot-first.**
+- **Personal-first, community-ready.**
+- **Evidence over hallucination**: toda afirmação factual da resposta cita a origem (autor, grupo, data).
+- **Capture once, remember forever**, respeitando políticas de retenção e exclusão.
+
+Fora do escopo da v0.1: memória coletiva entre usuários, knowledge graph sofisticado, agentes autônomos, múltiplas plataformas em produção, interface web completa, monetização e resumos proativos. Não implementar sem decisão explícita.
+
+## Estado atual
+
+Ainda não existe código: só ideação e requisitos. Comandos de build, lint e teste (incluindo como rodar um teste isolado) entram aqui quando a stack for definida.
+
+## Requisitos de engenharia (fonte: `requirements.md`)
+
+- **Documentation First** e **API First**: documentar e especificar o contrato da API antes de implementar.
+- **Security First** e **Local First**.
+- **TDD**: o teste vem antes da implementação.
+- **SOLID**, **Clean Architecture**, **KISS**, **DRY**, **YAGNI**.
+- **Pirâmide de testes**: unitário, integração, contrato, mutação e E2E.
+- **Pre-commit hooks** rodando os testes antes de cada commit.
+- **IaC com Terraform**.
+- **Observabilidade**: Grafana, Prometheus, Tempo (traces) e Loki (logs).
+
+### Definition of Ready (`requirements.md`)
+Uma entrega só está pronta quando tem:
+- build passando;
+- testes E2E passando;
+- code review aprovado;
+- análise de segurança do código sem achados críticos ou altos.
+
 # Reversa
 
 > Framework de Engenharia Reversa instalado neste projeto.
