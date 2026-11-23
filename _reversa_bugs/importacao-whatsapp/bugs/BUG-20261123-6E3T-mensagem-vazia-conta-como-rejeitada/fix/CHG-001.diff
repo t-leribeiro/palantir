@@ -1,0 +1,136 @@
+diff --git a/test/fixtures/whatsapp-export/android-pt-br-formas-reais.txt b/test/fixtures/whatsapp-export/android-pt-br-formas-reais.txt
+new file mode 100644
+index 0000000..3bd16d7
+--- /dev/null
++++ b/test/fixtures/whatsapp-export/android-pt-br-formas-reais.txt
+@@ -0,0 +1,10 @@
++22/11/2026 09:00 - As mensagens e ligações são protegidas com a criptografia de ponta a ponta. Somente as pessoas que fazem parte da conversa podem ler, ouvir ou compartilhar esse conteúdo.
++22/11/2026 09:01 - Diego: Segue o que rolou na outra conversa:
++[20/11/2026 14:10] Bia Souza: Alguém viu o alerta do Kafka?
++[20/11/2026 14:12] Caio: Era o disco cheio no broker 2
++22/11/2026 09:02 - Ana: 
++22/11/2026 09:02 - Ana: ‎IMG-20261122-WA0001.jpg (arquivo anexado)
++22/11/2026 09:03 - Ana: Mensagem apagada
++22/11/2026 09:04 - Ana: Corrigindo: o broker era o 3 <Mensagem editada>
++22/11/2026 09:05 - ~ Rafa: Valeu pela ajuda
++22/11/2026 09:06 - +55 11 98888-7777: Alguém testou o Karpenter?
+diff --git a/test/unit/whatsapp-export/importer.test.ts b/test/unit/whatsapp-export/importer.test.ts
+index fab485f..96505aa 100644
+--- a/test/unit/whatsapp-export/importer.test.ts
++++ b/test/unit/whatsapp-export/importer.test.ts
+@@ -64,6 +64,13 @@ describe("importWhatsAppExport", () => {
+     expect([...stored.values()][0]?.timestamp).toBe("2026-11-10T10:00:00.000Z");
+   });
+ 
++  it("mensagem sem texto é ignorada, não rejeitada (BUG-2)", async () => {
++    const { d, stored } = deps();
++    const report = await importWhatsAppExport(sample("android-pt-br-formas-reais.txt"), { conversation: "Comunidade DevOps" }, d);
++    expect(report).toMatchObject({ imported: 4, rejected: 0, systemIgnored: 3, mediaFound: 1 });
++    expect([...stored.values()].map((m) => m.sender.displayName)).toEqual(["Diego", "Ana", "Rafa", "+55 11 98888-7777"]);
++  });
++
+   it("não cria fonte nem grava nada quando o formato é recusado", async () => {
+     const { d, stored, ensured } = deps();
+     await expect(importWhatsAppExport(sample("not-whatsapp.txt"), { conversation: "X" }, d)).rejects.toMatchObject({ code: "unrecognized_format" });
+diff --git a/test/unit/whatsapp-export/parse.test.ts b/test/unit/whatsapp-export/parse.test.ts
+index ad64f15..203bf76 100644
+--- a/test/unit/whatsapp-export/parse.test.ts
++++ b/test/unit/whatsapp-export/parse.test.ts
+@@ -68,6 +68,44 @@ describe("iOS en", () => {
+   });
+ });
+ 
++describe("formas vistas em export real (BUG-1 a BUG-5 de _reversa_bugs/importacao-whatsapp)", () => {
++  const result = parseExport(fixture("android-pt-br-formas-reais.txt"));
++
++  it("trecho colado em outro formato continua na mensagem de quem colou (BUG-1)", () => {
++    expect(summary(result)[0]).toBe(
++      "22/11/2026 9:1 Diego: Segue o que rolou na outra conversa:\n[20/11/2026 14:10] Bia Souza: Alguém viu o alerta do Kafka?\n[20/11/2026 14:12] Caio: Era o disco cheio no broker 2",
++    );
++    expect(result.messages.map((m) => m.author)).not.toContain("Bia Souza");
++  });
++
++  it("export do iOS com linha colada no formato do Android também não se divide (BUG-1)", () => {
++    const ios = parseExport(["[10/11/2026, 10:00:15] Diego: veja:", "10/11/2026 09:00 - Ana: linha colada"]);
++    expect(summary(ios)).toEqual(["10/11/2026 10:0 Diego: veja:\n10/11/2026 09:00 - Ana: linha colada"]);
++  });
++
++  it("ignora mensagem sem texto e \"Mensagem apagada\" como sistema (BUG-2, BUG-3)", () => {
++    expect(result.messages.every((m) => m.text.trim() !== "")).toBe(true);
++    expect(result.messages.map((m) => m.text)).not.toContain("Mensagem apagada");
++    expect(result.systemCount).toBe(3);
++    expect(result.mediaCount).toBe(1);
++  });
++
++  it("tira o marcador de edição do fim do texto (BUG-4)", () => {
++    expect(summary(result)).toContain("22/11/2026 9:4 Ana: Corrigindo: o broker era o 3");
++    expect(summary(parseExport(["10/11/2026 10:00 - Ana: fixed it <This message was edited>"]))).toEqual([
++      "10/11/2026 10:0 Ana: fixed it",
++    ]);
++  });
++
++  it("tira o prefixo ~ de quem não está na agenda (BUG-5)", () => {
++    expect(summary(result).slice(2)).toEqual([
++      "22/11/2026 9:5 Rafa: Valeu pela ajuda",
++      "22/11/2026 9:6 +55 11 98888-7777: Alguém testou o Karpenter?",
++    ]);
++    expect(parseExport(["10/11/2026 10:00 - ~ Rafa: oi"]).messages[0]?.author).toBe("Rafa");
++  });
++});
++
+ describe("ordem de data e formatos inválidos", () => {
+   it("recusa datas ambíguas em 12h sem a opção", () => {
+     expect(() => parseExport(fixture("ambiguous-en.txt"))).toThrow(
+diff --git a/test/unit/whatsapp-export/real-exports.test.ts b/test/unit/whatsapp-export/real-exports.test.ts
+new file mode 100644
+index 0000000..8d3d8d7
+--- /dev/null
++++ b/test/unit/whatsapp-export/real-exports.test.ts
+@@ -0,0 +1,47 @@
++// Teste local sobre exportações reais em `exports/` (fora do git: dados de terceiros, repositório público).
++// Sem arquivos (CI, máquinas de outras pessoas), é pulado. As verificações só contam violações, para que uma
++// falha nunca imprima conteúdo de mensagem.
++import { existsSync, readdirSync } from "node:fs";
++import { fileURLToPath } from "node:url";
++import { describe, expect, it } from "vitest";
++import { importWhatsAppExport, type ImportDeps } from "../../../src/channels/whatsapp-export/index.js";
++import type { CanonicalMessage } from "../../../src/contracts/channel/knowledge-channel.js";
++
++const dir = fileURLToPath(new URL("../../../exports/", import.meta.url));
++const files = existsSync(dir) ? readdirSync(dir).filter((f) => /\.(zip|txt)$/i.test(f)) : [];
++
++const APP_MARKERS = /(<Mensagem editada>|<This message was edited>)$|^(Mensagem apagada|Esta mensagem foi apagada|This message was deleted)$/;
++
++async function importInMemory(file: string) {
++  const stored: CanonicalMessage[] = [];
++  const deps: ImportDeps = {
++    async ensureSource(title) {
++      return { provider: "whatsapp", accountId: "unlinked:local", conversationId: "export:local", title };
++    },
++    async ingest(message) {
++      stored.push(message);
++      return { outcome: "accepted", messageId: message.id };
++    },
++  };
++  const report = await importWhatsAppExport(`${dir}${file}`, { conversation: "local" }, deps);
++  return { report, stored };
++}
++
++describe.skipIf(files.length === 0)("exportações reais locais (exports/)", () => {
++  it.each(files)("%s: importa sem rejeitar, sem mensagens falsas nem marcadores do app", async (file) => {
++    const { report, stored } = await importInMemory(file);
++    const outOfOrder = stored.filter((m, i) => i > 0 && m.timestamp < (stored[i - 1]?.timestamp ?? "")).length;
++    const markers = stored.filter((m) => APP_MARKERS.test(m.text ?? "")).length;
++    const emptyTexts = stored.filter((m) => (m.text ?? "").trim() === "").length;
++    const tildeAuthors = stored.filter((m) => m.sender.displayName?.startsWith("~")).length;
++    expect({ rejected: report.rejected, unrecognized: report.unrecognizedLines, outOfOrder, markers, emptyTexts, tildeAuthors }).toEqual({
++      rejected: 0,
++      unrecognized: 0,
++      outOfOrder: 0,
++      markers: 0,
++      emptyTexts: 0,
++      tildeAuthors: 0,
++    });
++    expect(report.imported).toBeGreaterThan(0);
++  });
++});

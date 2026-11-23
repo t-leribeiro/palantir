@@ -1,0 +1,97 @@
+diff --git a/src/channels/whatsapp-export/parse.ts b/src/channels/whatsapp-export/parse.ts
+index c5a05ab..07a2cde 100644
+--- a/src/channels/whatsapp-export/parse.ts
++++ b/src/channels/whatsapp-export/parse.ts
+@@ -47,11 +47,17 @@ const ANDROID = new RegExp(String.raw`^${DATE}${TIME}\s-\s(.*)$`);
+ const IOS = new RegExp(String.raw`^\[${DATE}${TIME}\]\s(.*)$`);
+ const MARKS = /[\u200e\u200f\ufeff]/g;
+ const MEDIA = /^<(m[íi]dia oculta|media omitted|anexado:|attached:)|\((arquivo anexado|file attached)\)$/i;
+-const DELETED = /^(esta mensagem foi apagada|voc[êe] apagou esta mensagem|this message was deleted|you deleted this message)$/i;
++const DELETED = /^(esta mensagem foi apagada|mensagem apagada|voc[êe] apagou esta mensagem|this message was deleted|you deleted this message)$/i;
++/** Marcador que o próprio app acrescenta ao fim de mensagens editadas: não é texto do autor. */
++const EDITED = /\s*<(mensagem editada|this message was edited)>$/i;
++/** Prefixo que o app põe no nome de quem não está na agenda. */
++const NOT_IN_CONTACTS = /^~\s*/;
+ 
+ type Kind = "text" | "media" | "system";
++type Format = "android" | "ios";
+ 
+ interface RawEntry {
++  readonly format: Format;
+   readonly a: number;
+   readonly b: number;
+   readonly year: number;
+@@ -72,7 +78,8 @@ export function parseExport(lines: Iterable<string>, options: { dateOrder?: Date
+   for (const rawLine of lines) {
+     const line = rawLine.replace(/\r$/, "");
+     if (line.trim() !== "") nonEmpty += 1;
+-    const entry = parseHeader(line);
++    // O formato fica travado pelo primeiro cabeçalho: linha no outro formato é trecho colado, não mensagem.
++    const entry = parseHeader(line, entries[0]?.format);
+     if (entry) entries.push(entry);
+     else if (entries.length > 0) appendContinuation(entries, line);
+     else if (line.trim() !== "") {
+@@ -82,23 +89,26 @@ export function parseExport(lines: Iterable<string>, options: { dateOrder?: Date
+   }
+   assertRecognized(entries.length, unrecognized, nonEmpty, firstUnrecognized);
+   const dateOrder = options.dateOrder ?? detectDateOrder(entries);
++  const texts = entries.filter((e) => e.kind === "text").map((e) => toMessage(e, dateOrder));
++  const messages = texts.filter((m) => m.text !== "");
+   return {
+-    messages: entries.filter((e) => e.kind === "text").map((e) => toMessage(e, dateOrder)),
+-    systemCount: entries.filter((e) => e.kind === "system").length,
++    messages,
++    // Mensagem sem texto (ex.: mídia sem legenda) não é conhecimento: conta como ignorada, junto das de sistema.
++    systemCount: entries.filter((e) => e.kind === "system").length + texts.length - messages.length,
+     mediaCount: entries.filter((e) => e.kind === "media").length,
+     unrecognizedLines: unrecognized,
+     dateOrder,
+   };
+ }
+ 
+-function parseHeader(line: string): RawEntry | null {
++function parseHeader(line: string, format: Format | undefined): RawEntry | null {
+   const clean = line.replace(/^[\u200e\u200f\ufeff]+/, "");
+-  const ios = IOS.exec(clean);
+-  const match = ios ?? ANDROID.exec(clean);
+-  if (!match) return null;
+-  const [, a, b, year, hour, minute, second, ampm, rest = ""] = match;
+-  const { kind, author, text } = classify(rest, Boolean(ios));
++  const header = matchHeader(clean, format);
++  if (!header) return null;
++  const [, a, b, year, hour, minute, second, ampm, rest = ""] = header.match;
++  const { kind, author, text } = classify(rest, header.format === "ios");
+   return {
++    format: header.format,
+     a: Number(a),
+     b: Number(b),
+     year: normalizeYear(Number(year)),
+@@ -112,10 +122,18 @@ function parseHeader(line: string): RawEntry | null {
+   };
+ }
+ 
++/** Casa o cabeçalho no formato já travado do arquivo; sem formato ainda, aceita os dois. */
++function matchHeader(clean: string, format: Format | undefined): { format: Format; match: RegExpExecArray } | null {
++  const ios = format === "android" ? null : IOS.exec(clean);
++  if (ios) return { format: "ios", match: ios };
++  const android = format === "ios" ? null : ANDROID.exec(clean);
++  return android ? { format: "android", match: android } : null;
++}
++
+ function classify(rest: string, ios: boolean): { kind: Kind; author: string; text: string } {
+   const separator = rest.indexOf(": ");
+   if (separator < 0) return { kind: "system", author: "", text: "" };
+-  const author = rest.slice(0, separator).replace(MARKS, "").trim();
++  const author = rest.slice(0, separator).replace(MARKS, "").trim().replace(NOT_IN_CONTACTS, "");
+   const rawText = rest.slice(separator + 2);
+   const text = rawText.replace(MARKS, "").trim();
+   if (MEDIA.test(text)) return { kind: "media", author, text: "" };
+@@ -153,7 +171,7 @@ function toMessage(e: RawEntry, order: DateOrder): ParsedMessage {
+   return {
+     local: { year: e.year, month, day, hour: e.hour, minute: e.minute, second: e.second },
+     author: e.author,
+-    text: e.text.trimEnd(),
++    text: e.text.replace(EDITED, "").trim(),
+   };
+ }
+ 

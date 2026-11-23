@@ -64,6 +64,13 @@ describe("importWhatsAppExport", () => {
     expect([...stored.values()][0]?.timestamp).toBe("2026-11-10T10:00:00.000Z");
   });
 
+  it("mensagem sem texto é ignorada, não rejeitada (BUG-2)", async () => {
+    const { d, stored } = deps();
+    const report = await importWhatsAppExport(sample("android-pt-br-formas-reais.txt"), { conversation: "Comunidade DevOps" }, d);
+    expect(report).toMatchObject({ imported: 4, rejected: 0, systemIgnored: 3, mediaFound: 1 });
+    expect([...stored.values()].map((m) => m.sender.displayName)).toEqual(["Diego", "Ana", "Rafa", "+55 11 98888-7777"]);
+  });
+
   it("não cria fonte nem grava nada quando o formato é recusado", async () => {
     const { d, stored, ensured } = deps();
     await expect(importWhatsAppExport(sample("not-whatsapp.txt"), { conversation: "X" }, d)).rejects.toMatchObject({ code: "unrecognized_format" });

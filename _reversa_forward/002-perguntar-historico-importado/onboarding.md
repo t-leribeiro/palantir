@@ -11,7 +11,7 @@
    npm run import -- "C:\Users\voce\Downloads\Conversa do WhatsApp com Comunidade DevOps.zip" --conversa "Comunidade DevOps"
    ```
 
-   Você deve ver o relatório: período coberto, mensagens importadas, mensagens de sistema ignoradas e mídias encontradas.
+   Você deve ver o relatório: período coberto, mensagens importadas, mensagens de sistema ou sem texto ignoradas e mídias encontradas.
 3. **Perguntar** sobre algo que você lembra ter sido dito na conversa:
 
    ```bash

@@ -68,6 +68,44 @@ describe("iOS en", () => {
   });
 });
 
+describe("formas vistas em export real (BUG-1 a BUG-5 de _reversa_bugs/importacao-whatsapp)", () => {
+  const result = parseExport(fixture("android-pt-br-formas-reais.txt"));
+
+  it("trecho colado em outro formato continua na mensagem de quem colou (BUG-1)", () => {
+    expect(summary(result)[0]).toBe(
+      "22/11/2026 9:1 Diego: Segue o que rolou na outra conversa:\n[20/11/2026 14:10] Bia Souza: Alguém viu o alerta do Kafka?\n[20/11/2026 14:12] Caio: Era o disco cheio no broker 2",
+    );
+    expect(result.messages.map((m) => m.author)).not.toContain("Bia Souza");
+  });
+
+  it("export do iOS com linha colada no formato do Android também não se divide (BUG-1)", () => {
+    const ios = parseExport(["[10/11/2026, 10:00:15] Diego: veja:", "10/11/2026 09:00 - Ana: linha colada"]);
+    expect(summary(ios)).toEqual(["10/11/2026 10:0 Diego: veja:\n10/11/2026 09:00 - Ana: linha colada"]);
+  });
+
+  it("ignora mensagem sem texto e \"Mensagem apagada\" como sistema (BUG-2, BUG-3)", () => {
+    expect(result.messages.every((m) => m.text.trim() !== "")).toBe(true);
+    expect(result.messages.map((m) => m.text)).not.toContain("Mensagem apagada");
+    expect(result.systemCount).toBe(3);
+    expect(result.mediaCount).toBe(1);
+  });
+
+  it("tira o marcador de edição do fim do texto (BUG-4)", () => {
+    expect(summary(result)).toContain("22/11/2026 9:4 Ana: Corrigindo: o broker era o 3");
+    expect(summary(parseExport(["10/11/2026 10:00 - Ana: fixed it <This message was edited>"]))).toEqual([
+      "10/11/2026 10:0 Ana: fixed it",
+    ]);
+  });
+
+  it("tira o prefixo ~ de quem não está na agenda (BUG-5)", () => {
+    expect(summary(result).slice(2)).toEqual([
+      "22/11/2026 9:5 Rafa: Valeu pela ajuda",
+      "22/11/2026 9:6 +55 11 98888-7777: Alguém testou o Karpenter?",
+    ]);
+    expect(parseExport(["10/11/2026 10:00 - ~ Rafa: oi"]).messages[0]?.author).toBe("Rafa");
+  });
+});
+
 describe("ordem de data e formatos inválidos", () => {
   it("recusa datas ambíguas em 12h sem a opção", () => {
     expect(() => parseExport(fixture("ambiguous-en.txt"))).toThrow(

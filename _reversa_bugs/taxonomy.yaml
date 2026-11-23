@@ -1,0 +1,19 @@
+# Vocabulário controlado de area/module/feature (semeado de _reversa_sdd/sdd/ e src/).
+area:
+  - channels
+  - core
+  - platform
+module:
+  - whatsapp-export-importer
+  - whatsapp-baileys-adapter
+  - channel-contract
+  - identity-and-sources
+  - ingestion
+  - knowledge-indexing
+  - retrieval
+  - conversational-agent
+  - media-transcription
+  - platform-foundation
+feature:
+  - 001-walking-skeleton
+  - 002-perguntar-historico-importado
