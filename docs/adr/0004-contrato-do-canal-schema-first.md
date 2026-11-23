@@ -18,6 +18,10 @@
 - Validação em tempo de execução com Ajv antes da ingestão.
 - A API HTTP é descrita em `contracts/openapi.yaml` (OpenAPI 3.1) e verificada por teste de conformidade.
 
+## Atualização 2026-11-23: contrato 1.1.0
+
+A fatia S1 (feature `002`) acrescentou `source.importKey` (SHA-256 em hexadecimal), obrigatório quando `captureMethod = export_import`. É uma mudança aditiva: o núcleo aceita qualquer `1.x`, e adaptadores 1.0.0 continuam válidos. A chave deduplica reimportações sem reaproveitar `externalMessageId`, que fica reservado para a captura ao vivo e para a reconciliação da S3.
+
 ## Consequências
 
 - Positivas: novo canal sem mudar o núcleo nem o banco; outros adaptadores (até em outra linguagem) podem usar os mesmos schemas.

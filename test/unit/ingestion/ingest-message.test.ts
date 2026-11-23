@@ -104,6 +104,7 @@ describe("ingestão de mensagens", () => {
       spaceId: "space-1",
       sourceId: "src-1",
       externalMessageId: "m-1",
+      importKey: undefined,
       sender: { externalId: "ana", displayName: "Ana" },
       kind: "text",
       text: "O Grafana Alloy centraliza a coleta de telemetria",
@@ -146,6 +147,19 @@ describe("ingestão de mensagens", () => {
     await expect(ingest(canonicalMessage())).rejects.toThrow("fila indisponível");
     expect(store.messages).toHaveLength(0);
     expect(await ingest(canonicalMessage())).toMatchObject({ outcome: "accepted" });
+  });
+
+  it("leva a chave de importação para a mensagem gravada (contrato 1.1.0)", async () => {
+    const { ingest, store } = setup();
+    const key = "b".repeat(64);
+    await ingest(
+      canonicalMessage({
+        source: { provider: "whatsapp", accountId: "unlinked:u1", conversationId: "export:devops", importKey: key },
+        provenance: { captureMethod: "export_import", capturedAt: "2026-11-23T10:00:00Z", adapter: "whatsapp-export" },
+      }),
+    );
+    expect(store.messages[0]).toMatchObject({ importKey: key, externalMessageId: undefined });
+    expect(store.messages[0]?.provenance.captureMethod).toBe("export_import");
   });
 
   it("aceita mensagens distintas da mesma fonte", async () => {

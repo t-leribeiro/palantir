@@ -4,7 +4,7 @@ import type { AgentReply, CanonicalMessage } from "./generated.js";
 
 export type { AgentReply, CanonicalMessage, Citation } from "./generated.js";
 
-export const CONTRACT_VERSION = "1.0.0";
+export const CONTRACT_VERSION = "1.1.0";
 
 export interface ConversationRef {
   readonly conversationId: string;

@@ -2,9 +2,10 @@
 
 Personal Knowledge Agent: transforma conversas dispersas (grupos do WhatsApp, incluindo áudios) em uma memória pesquisável, consultada pelo próprio canal, com a fonte de cada resposta. WhatsApp-first, not WhatsApp-only.
 
-Estado: **walking skeleton** (feature `001`). O caminho completo funciona com um canal de teste: mensagem → ingestão → indexação → pergunta → resposta com citação ou "Não encontrei evidências suficientes.". WhatsApp real, transcrição e busca semântica são as próximas features.
+Estado: **S1 entregue** (feature `002`): importar uma conversa exportada do WhatsApp e perguntar sobre ela pelo canal de teste, com citação de autor, conversa e data originais. O caminho completo da S0 (feature `001`) segue valendo. WhatsApp ao vivo, áudios e busca semântica vêm nas próximas fatias.
 
 - Produto: [`_reversa_sdd/prd.md`](_reversa_sdd/prd.md) e specs em [`_reversa_sdd/sdd/`](_reversa_sdd/sdd/)
+- Plano e status das entregas: [`docs/plano-de-fatias.md`](docs/plano-de-fatias.md)
 - Decisões de arquitetura: [`docs/adr/`](docs/adr/README.md)
 - Feature atual: [`_reversa_forward/001-walking-skeleton/`](_reversa_forward/001-walking-skeleton/)
 
@@ -32,6 +33,8 @@ npm run dev:api        # http://localhost:8080
 npm run dev:worker     # em outro terminal
 ```
 
+Importar uma conversa exportada do WhatsApp (S1): `npm run import -- <arquivo.zip|.txt> --conversa "<nome>"` (roteiro em [`onboarding.md` da 002](_reversa_forward/002-perguntar-historico-importado/onboarding.md)).
+
 Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`onboarding.md`](_reversa_forward/001-walking-skeleton/onboarding.md). `npm run teardown` destrói o ambiente.
 
 ## Comandos
@@ -48,6 +51,7 @@ Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`
 | `npm run test:e2e` | Walking skeleton ponta a ponta (API e worker reais) |
 | `npm run test:mutation` | StrykerJS, limiar 60% |
 | `npm run test:load` | Carga de ingestão (critério de migração do ADR-0003) |
+| `npm run import -- <arquivo> --conversa "<nome>"` | Importa uma conversa exportada do WhatsApp (só texto na S1); reimportar não duplica |
 | `npm run eval` | Conjunto de avaliação (`eval/cases.json`): acertos, citações, "não encontrei" |
 | `npm run security` | Semgrep, OSV-Scanner e gitleaks; falha em achado crítico ou alto |
 | `npm run dor` | Todos os itens automáticos da DoR, localmente |

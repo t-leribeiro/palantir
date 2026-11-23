@@ -17,12 +17,13 @@ Fora do escopo da v0.1: memória coletiva entre usuários, knowledge graph sofis
 
 ## Estado atual
 
-Walking skeleton entregue (feature `001`, ver `_reversa_sdd/addenda/001-walking-skeleton.md`): caminho ponta a ponta com canal de teste, sem WhatsApp real, transcrição nem busca semântica ainda. Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
+S0 (feature `001`) e S1 (feature `002`, importação de conversas exportadas) entregues; adendos em `_reversa_sdd/addenda/`. Ainda sem WhatsApp ao vivo, transcrição nem busca semântica. **Plano e status das entregas: `docs/plano-de-fatias.md`** (atualize o status a cada fatia). Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
 
 Use `nvm use 22` antes de trabalhar: o `engine-strict` recusa outras versões e os hooks de commit falham sem ela. `npm run doctor` confere Node, Docker, Terraform, gitleaks e OSV-Scanner.
 
 Comandos:
 - Ambiente: `npm run setup` (Terraform; gera o `.env`), `npm run db:migrate`, `npm run seed`, `npm run dev:api`, `npm run dev:worker`, `npm run teardown`
+- Importar uma conversa exportada do WhatsApp: `npm run import -- <arquivo.zip|.txt> --conversa "<nome>"`
 - Gates rápidos: `npm run typecheck`, `npm run lint` (complexidade ≤ 10), `npm run arch`, `npm run contracts:check`, `npm test`
 - Com Docker: `npm run test:integration`, `npm run test:e2e`, `npm run test:mutation`, `npm run security`, `npm run eval`, `npm run test:load`
 - DoR local completa: `npm run dor`

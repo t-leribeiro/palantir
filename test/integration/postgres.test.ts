@@ -5,7 +5,12 @@ import { createPgIdentityRepository, createResolveUserByChannelAccount } from ".
 import { INDEX_QUEUE, createIngestMessage, createPgUnitOfWork } from "../../src/modules/ingestion/index.js";
 import { createIndexMessage, createPgChunkRepository } from "../../src/modules/knowledge/index.js";
 import { createPgSearchIndex, createSearchEvidence } from "../../src/modules/retrieval/index.js";
-import { createIsSourceAuthorized, createPgSourceRepository } from "../../src/modules/sources/index.js";
+import {
+  createEnsureImportSource,
+  createIsSourceAuthorized,
+  createPgImportSourceRepository,
+  createPgSourceRepository,
+} from "../../src/modules/sources/index.js";
 import { createJobQueue, type JobQueue } from "../../src/platform/queue/index.js";
 import { newId } from "../../src/shared/index.js";
 import { canonicalMessage } from "../support/messages.js";
@@ -82,6 +87,51 @@ describe("ingestão com PostgreSQL e pg-boss", () => {
     const { rows } = await db.pool.query("SELECT count(*)::int AS n FROM messages WHERE external_message_id = 'rollback-1'");
     expect(rows[0].n).toBe(0);
     expect(await queue.pendingCount(INDEX_QUEUE)).toBe(before);
+  });
+});
+
+describe("importação (contrato 1.1.0)", () => {
+  it("deduplica por chave de importação e mantém mensagens iguais com chaves diferentes", async () => {
+    await seedOperator(db.pool, { conversationId: "export:devops", conversationTitle: "DevOps importado" });
+    const ingest = ingestor();
+    const imported = (importKey: string, text: string) =>
+      canonicalMessage({
+        source: { provider: "fake", accountId: "fake-operator", conversationId: "export:devops", importKey },
+        text,
+        provenance: { captureMethod: "export_import", capturedAt: "2026-11-23T10:00:00Z", adapter: "whatsapp-export" },
+      });
+    const first = await ingest(imported("c".repeat(64), "ok"));
+    const again = await ingest(imported("c".repeat(64), "ok"));
+    const twin = await ingest(imported("d".repeat(64), "ok"));
+    expect(first.outcome).toBe("accepted");
+    expect(again).toEqual({ outcome: "duplicate", messageId: (first as { messageId: string }).messageId });
+    expect(twin.outcome).toBe("accepted");
+    const { rows } = await db.pool.query(
+      "SELECT count(*)::int AS n FROM messages m JOIN message_provenance p ON p.message_id = m.id WHERE m.import_key IN ($1, $2) AND p.capture_method = 'export_import'",
+      ["c".repeat(64), "d".repeat(64)],
+    );
+    expect(rows[0].n).toBe(2);
+  });
+});
+
+describe("fonte importada (S1)", () => {
+  it("cria a conta whatsapp pendente e a fonte autorizada uma vez só, e a conta não identifica ninguém", async () => {
+    const seed = await seedOperator(db.pool);
+    const ensure = createEnsureImportSource(createPgImportSourceRepository(db.pool));
+    const first = await ensure({ userId: seed.userId, spaceId: seed.spaceId }, "Comunidade DevOps");
+    const second = await ensure({ userId: seed.userId, spaceId: seed.spaceId }, "Comunidade DevOps");
+    expect(first.created).toBe(true);
+    expect(second).toEqual({ ...first, created: false });
+    const accounts = await db.pool.query("SELECT status FROM channel_accounts WHERE user_id = $1 AND provider = 'whatsapp'", [seed.userId]);
+    expect(accounts.rows).toEqual([{ status: "pending" }]);
+    const check = await createIsSourceAuthorized(createPgSourceRepository(db.pool))({
+      provider: first.provider,
+      accountId: first.accountId,
+      conversationId: first.conversationId,
+    });
+    expect(check).toEqual({ status: "authorized", sourceId: first.sourceId, spaceId: seed.spaceId });
+    const resolve = createResolveUserByChannelAccount(createPgIdentityRepository(db.pool));
+    expect(await resolve("whatsapp", first.accountId)).toBeNull();
   });
 });
 

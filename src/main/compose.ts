@@ -51,11 +51,7 @@ export interface ApiHandle {
 
 export async function buildApi(config: AppConfig, options: CompositionOptions = {}): Promise<ApiHandle> {
   const { pool, queue, logger, metrics } = await infra(config, options);
-  const ingest = createIngestMessage({
-    sources: { check: createIsSourceAuthorized(createPgSourceRepository(pool)) },
-    unitOfWork: createPgUnitOfWork(pool, queue),
-    ids: newId,
-  });
+  const ingest = buildIngest(pool, queue);
   const search = createSearchEvidence({ index: createPgSearchIndex(pool), lowConfidenceThreshold: config.lowConfidenceThreshold });
   const ask = createAskQuestion({
     identity: { resolve: createResolveUserByChannelAccount(createPgIdentityRepository(pool)) },
@@ -90,6 +86,15 @@ export async function buildApi(config: AppConfig, options: CompositionOptions = 
       await pool.end();
     },
   };
+}
+
+/** Ingestão completa (autorização, deduplicação, gravação e job na mesma transação). */
+export function buildIngest(pool: Pool, queue: JobQueue) {
+  return createIngestMessage({
+    sources: { check: createIsSourceAuthorized(createPgSourceRepository(pool)) },
+    unitOfWork: createPgUnitOfWork(pool, queue),
+    ids: newId,
+  });
 }
 
 function record(metrics: AppMetrics, logger: Logger) {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://palantir.local/contracts/channel/canonical-message.schema.json",
   "title": "CanonicalMessage",
-  "description": "Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004).",
+  "description": "Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004; 1.1.0 adiciona source.importKey).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -52,6 +52,11 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200
+        },
+        "importKey": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Chave determinística da mensagem importada (SHA-256 em hex); obrigatória em export_import."
         }
       }
     },
@@ -210,6 +215,36 @@
             "type": "object",
             "required": [
               "externalMessageId"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "provenance"
+        ],
+        "properties": {
+          "provenance": {
+            "type": "object",
+            "required": [
+              "captureMethod"
+            ],
+            "properties": {
+              "captureMethod": {
+                "const": "export_import"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "type": "object",
+            "required": [
+              "importKey"
             ]
           }
         }

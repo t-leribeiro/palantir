@@ -1,15 +1,17 @@
 {
   "schema-version": 1,
-  "feature-dir": "_reversa_forward/001-walking-skeleton",
-  "feature-id": "001",
-  "short-name": "walking-skeleton",
-  "started-at": "2026-11-22T21:15:56-03:00",
+  "feature-dir": "_reversa_forward/002-perguntar-historico-importado",
+  "feature-id": "002",
+  "short-name": "perguntar-historico-importado",
+  "started-at": "2026-11-23T07:40:46-03:00",
   "current-stage": "coding",
   "stages-completed": [
     "requirements",
     "clarify",
     "plan",
-    "to-do"
+    "to-do",
+    "coding",
+    "sync"
   ],
   "paused-features": []
 }
