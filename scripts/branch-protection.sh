@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Aplica a DoR como proteção da branch main (RF-16): todos os jobs de .github/workflows/pr.yml
-# obrigatórios, 1 aprovação de review, sem push direto nem force push.
-# Uso: scripts/branch-protection.sh [owner/repo]   (requer `gh` autenticado com permissão de admin)
+# obrigatórios, PR obrigatório, sem push direto nem force push.
+#
+# Uso: [REQUIRED_APPROVALS=N] scripts/branch-protection.sh [owner/repo]
+#   Requer `gh` autenticado com permissão de admin. REQUIRED_APPROVALS padrão: 0, porque o repositório
+#   ainda tem um único colaborador e o GitHub não permite aprovar o próprio PR. Com um revisor no time,
+#   rode com REQUIRED_APPROVALS=1 para cumprir o "code review aprovado" da DoR (decisão de 2026-11-23).
 set -euo pipefail
 
 REPO="${1:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+APPROVALS="${REQUIRED_APPROVALS:-0}"
 CHECKS=(
   "static (tipos, lint, complexidade, arquitetura, contratos)"
   "unit (unitários, arquitetura, contrato)"
@@ -15,16 +20,24 @@ CHECKS=(
   "security (Semgrep, OSV-Scanner, gitleaks)"
 )
 
-contexts=$(printf '%s\n' "${CHECKS[@]}" | jq -R . | jq -s .)
+contexts=""
+for check in "${CHECKS[@]}"; do
+  contexts+="${contexts:+,}\"${check}\""
+done
 
-jq -n --argjson contexts "$contexts" '{
-  required_status_checks: { strict: true, contexts: $contexts },
-  enforce_admins: true,
-  required_pull_request_reviews: { required_approving_review_count: 1, dismiss_stale_reviews: true },
-  restrictions: null,
-  allow_force_pushes: false,
-  allow_deletions: false,
-  required_conversation_resolution: true
-}' | gh api --method PUT "repos/${REPO}/branches/main/protection" --input - >/dev/null
+gh api --method PUT "repos/${REPO}/branches/main/protection" --input - >/dev/null <<JSON
+{
+  "required_status_checks": { "strict": true, "contexts": [${contexts}] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": ${APPROVALS},
+    "dismiss_stale_reviews": true
+  },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
+JSON
 
-echo "Proteção aplicada em ${REPO}@main: ${#CHECKS[@]} checks obrigatórios e 1 aprovação."
+echo "Proteção aplicada em ${REPO}@main: ${#CHECKS[@]} checks obrigatórios, PR obrigatório, ${APPROVALS} aprovação(ões)."
