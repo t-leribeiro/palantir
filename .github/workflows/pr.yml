@@ -1,0 +1,122 @@
+# Esteira da DoR (RF-16): todo pull request para main passa por estes jobs.
+# A proteção da branch (scripts/branch-protection.sh) torna todos obrigatórios, com 1 aprovação.
+name: pr
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  OSV_SCANNER_VERSION: 2.7.0
+
+jobs:
+  static:
+    name: static (tipos, lint, complexidade, arquitetura, contratos)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run complexity:check
+      - run: npm run complexity:report
+      - run: npm run arch
+      - run: npm run contracts:check
+
+  unit:
+    name: unit (unitários, arquitetura, contrato)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npx vitest run --project unit --project architecture --project contract --coverage
+
+  integration:
+    name: integration (PostgreSQL real)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run test:integration
+
+  e2e:
+    name: e2e (walking skeleton ponta a ponta)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run test:e2e
+
+  infra:
+    name: infra (Terraform do ambiente local, sem drift)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with: { terraform_version: 1.17.2, terraform_wrapper: false }
+      - run: terraform fmt -check -recursive infra
+      - run: terraform -chdir=infra/local init -input=false
+      - run: terraform -chdir=infra/local validate
+      - run: terraform -chdir=infra/local apply -auto-approve -input=false
+      - name: segundo plan sem diferenças
+        run: terraform -chdir=infra/local plan -detailed-exitcode -input=false
+      - if: always()
+        run: terraform -chdir=infra/local destroy -auto-approve -input=false
+
+  mutation:
+    name: mutation (≥ 60%)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run test:mutation
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: mutation-report, path: reports/mutation/, if-no-files-found: ignore }
+
+  security:
+    name: security (Semgrep, OSV-Scanner, gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc }
+      - name: instalar gitleaks e OSV-Scanner (versões fixadas)
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C "$HOME/bin" gitleaks
+          curl -fsSL -o "$HOME/bin/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          chmod +x "$HOME/bin/osv-scanner"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - run: npm run security
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: security-reports, path: reports/security/, if-no-files-found: ignore }

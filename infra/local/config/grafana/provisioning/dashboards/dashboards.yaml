@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: palantir
+    folder: Palantír
+    type: file
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards

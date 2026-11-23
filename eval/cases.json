@@ -1,0 +1,367 @@
+{
+  "$comment": "Corpus e perguntas sintéticos (sem dados reais de terceiros). Usado por `npm run eval` (T054, RF-18).",
+  "corpus": [
+    {
+      "id": "m01",
+      "author": "Ana",
+      "conversation": "Grupo Arquitetura",
+      "text": "O Grafana Alloy centraliza a coleta de telemetria e manda para vários backends"
+    },
+    {
+      "id": "m02",
+      "author": "Bruno",
+      "conversation": "Grupo Arquitetura",
+      "text": "Estamos migrando do Datadog para OpenTelemetry para reduzir o vendor lock-in"
+    },
+    {
+      "id": "m03",
+      "author": "Carla",
+      "conversation": "Grupo DevOps",
+      "text": "O Karpenter reduziu em 30% o custo do nosso cluster Kubernetes"
+    },
+    {
+      "id": "m04",
+      "author": "Diego",
+      "conversation": "Grupo DevOps",
+      "text": "Recomendo o Temporal para orquestrar workflows de longa duração"
+    },
+    {
+      "id": "m05",
+      "author": "Elisa",
+      "conversation": "Grupo IA",
+      "text": "Testamos o pgvector e a busca semântica ficou boa até um milhão de vetores"
+    },
+    {
+      "id": "m06",
+      "author": "Fábio",
+      "conversation": "Grupo IA",
+      "text": "O Whisper large transcreve áudio em português com pouca taxa de erro"
+    },
+    {
+      "id": "m07",
+      "author": "Gabi",
+      "conversation": "Grupo Arquitetura",
+      "text": "Monólito modular com workers é suficiente para o começo do produto"
+    },
+    {
+      "id": "m08",
+      "author": "Hugo",
+      "conversation": "Grupo DevOps",
+      "text": "Terraform com módulos reutilizáveis evita drift entre ambientes"
+    },
+    {
+      "id": "m09",
+      "author": "Iara",
+      "conversation": "Grupo IA",
+      "text": "Para RAG, citar a fonte de cada afirmação reduz alucinação"
+    },
+    {
+      "id": "m10",
+      "author": "João",
+      "conversation": "Grupo DevOps",
+      "text": "O Loki ficou bem mais barato que o Elasticsearch para guardar logs"
+    },
+    {
+      "id": "m11",
+      "author": "Ana",
+      "conversation": "Grupo IA",
+      "text": "Usamos o Claude para revisar pull requests e achar bugs de concorrência"
+    },
+    {
+      "id": "m12",
+      "author": "Bruno",
+      "conversation": "Grupo DevOps",
+      "text": "O Argo CD resolveu nosso deploy GitOps em vários clusters"
+    },
+    {
+      "id": "m13",
+      "author": "Carla",
+      "conversation": "Grupo Arquitetura",
+      "text": "Event sourcing complicou a evolução do esquema no nosso time"
+    },
+    {
+      "id": "m14",
+      "author": "Diego",
+      "conversation": "Grupo IA",
+      "text": "LangGraph ajudou a montar agentes com estado e ferramentas"
+    },
+    {
+      "id": "m15",
+      "author": "Elisa",
+      "conversation": "Grupo DevOps",
+      "text": "O Prometheus com retenção de 15 dias consumiu muito disco"
+    },
+    {
+      "id": "m16",
+      "author": "Fábio",
+      "conversation": "Grupo Arquitetura",
+      "text": "Preferimos PostgreSQL ao MongoDB pela integridade referencial"
+    },
+    {
+      "id": "m17",
+      "author": "Gabi",
+      "conversation": "Grupo IA",
+      "text": "Embeddings multilíngues funcionam melhor que traduzir antes de indexar"
+    },
+    {
+      "id": "m18",
+      "author": "Hugo",
+      "conversation": "Grupo DevOps",
+      "text": "Semgrep no pipeline pegou uma injeção de SQL antes do merge"
+    },
+    {
+      "id": "m19",
+      "author": "Iara",
+      "conversation": "Grupo Arquitetura",
+      "text": "Feature flags com rollout gradual evitaram um incidente na Black Friday"
+    },
+    {
+      "id": "m20",
+      "author": "João",
+      "conversation": "Grupo IA",
+      "text": "O custo por token caiu bastante com cache de prompt"
+    }
+  ],
+  "cases": [
+    {
+      "id": "p01",
+      "question": "Quem falou do Grafana Alloy?",
+      "expectedMessageIds": [
+        "m01"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p02",
+      "question": "Alguém comentou sobre migrar do Datadog?",
+      "expectedMessageIds": [
+        "m02"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p03",
+      "question": "O que disseram do Karpenter?",
+      "expectedMessageIds": [
+        "m03"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p04",
+      "question": "Quem recomendou o Temporal?",
+      "expectedMessageIds": [
+        "m04"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p05",
+      "question": "Como foi a experiência com pgvector?",
+      "expectedMessageIds": [
+        "m05"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p06",
+      "question": "O Whisper funciona bem em português?",
+      "expectedMessageIds": [
+        "m06"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p07",
+      "question": "Falaram de monólito modular?",
+      "expectedMessageIds": [
+        "m07"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p08",
+      "question": "Quem comentou sobre drift no Terraform?",
+      "expectedMessageIds": [
+        "m08"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p09",
+      "question": "Citar a fonte reduz alucinação em RAG?",
+      "expectedMessageIds": [
+        "m09"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p10",
+      "question": "O Loki é mais barato que o Elasticsearch?",
+      "expectedMessageIds": [
+        "m10"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p11",
+      "question": "Quem usa o Claude para revisar pull requests?",
+      "expectedMessageIds": [
+        "m11"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p12",
+      "question": "Alguém usou Argo CD para GitOps?",
+      "expectedMessageIds": [
+        "m12"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p13",
+      "question": "O que acharam de event sourcing?",
+      "expectedMessageIds": [
+        "m13"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p14",
+      "question": "Quem falou de LangGraph?",
+      "expectedMessageIds": [
+        "m14"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p15",
+      "question": "Retenção do Prometheus consome disco?",
+      "expectedMessageIds": [
+        "m15"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p16",
+      "question": "Por que preferiram PostgreSQL?",
+      "expectedMessageIds": [
+        "m16"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p17",
+      "question": "Embeddings multilíngues ou tradução?",
+      "expectedMessageIds": [
+        "m17"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p18",
+      "question": "O Semgrep pegou alguma injeção de SQL?",
+      "expectedMessageIds": [
+        "m18"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p19",
+      "question": "Feature flags evitaram incidente?",
+      "expectedMessageIds": [
+        "m19"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p20",
+      "question": "Cache de prompt reduz custo por token?",
+      "expectedMessageIds": [
+        "m20"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p21",
+      "question": "vendor lock-in opentelemetry",
+      "expectedMessageIds": [
+        "m02"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p22",
+      "question": "custo do cluster kubernetes",
+      "expectedMessageIds": [
+        "m03"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p23",
+      "question": "workflows de longa duração",
+      "expectedMessageIds": [
+        "m04"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "p24",
+      "question": "bugs de concorrência",
+      "expectedMessageIds": [
+        "m11"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "n01",
+      "question": "Quem falou de Kafka?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n02",
+      "question": "Alguém recomendou o Jenkins?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n03",
+      "question": "O que disseram sobre Rust?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n04",
+      "question": "Comentaram sobre Snowflake?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n05",
+      "question": "Quem usa Svelte no front?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n06",
+      "question": "Falaram de blockchain?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n07",
+      "question": "Alguém testou o Cassandra?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n08",
+      "question": "O que acharam do Heroku?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    }
+  ]
+}

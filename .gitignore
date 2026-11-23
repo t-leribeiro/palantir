@@ -1,0 +1,21 @@
+# Dependências e build
+node_modules/
+dist/
+coverage/
+reports/
+.stryker-tmp/
+*.tsbuildinfo
+
+# Segredos e ambiente local
+.env
+.env.*
+!.env.example
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/.terraform.lock.hcl.bak
+infra/**/terraform.tfvars
+
+# Sistema
+.DS_Store
+Thumbs.db

@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://palantir.local/contracts/channel/canonical-message.schema.json",
+  "title": "CanonicalMessage",
+  "description": "Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "id",
+    "source",
+    "sender",
+    "timestamp",
+    "kind",
+    "isForwarded",
+    "attachments",
+    "provenance"
+  ],
+  "properties": {
+    "contractVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "accountId",
+        "conversationId"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$"
+        },
+        "accountId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "externalMessageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "sender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalId"
+      ],
+      "properties": {
+        "externalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "timestamp": {
+      "$ref": "#/$defs/zonedDateTime"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "text",
+        "audio",
+        "image",
+        "document",
+        "link"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 50000
+    },
+    "quotedExternalMessageId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "isForwarded": {
+      "type": "boolean"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "mimeType"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 3
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "storageKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fetchRef": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captureMethod",
+        "capturedAt",
+        "adapter"
+      ],
+      "properties": {
+        "captureMethod": {
+          "type": "string",
+          "enum": [
+            "live",
+            "export_import",
+            "forwarded_to_agent"
+          ]
+        },
+        "capturedAt": {
+          "$ref": "#/$defs/zonedDateTime"
+        },
+        "adapter": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "text",
+              "link"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "provenance"
+        ],
+        "properties": {
+          "provenance": {
+            "type": "object",
+            "required": [
+              "captureMethod"
+            ],
+            "properties": {
+              "captureMethod": {
+                "const": "live"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "type": "object",
+            "required": [
+              "externalMessageId"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "zonedDateTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|[+-]\\d{2}:\\d{2})$",
+      "description": "ISO 8601 com fuso obrigatório."
+    }
+  }
+}

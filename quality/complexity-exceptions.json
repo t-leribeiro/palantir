@@ -1,0 +1,4 @@
+{
+  "$comment": "Exceções ao limite de complexidade ciclomática 10 (ADR-0005). Cada item exige file, function, justification e reviewer, e um `// eslint-disable-next-line complexity -- <justificativa>` imediatamente antes da função.",
+  "exceptions": []
+}
