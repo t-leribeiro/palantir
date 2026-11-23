@@ -19,3 +19,6 @@ infra/**/terraform.tfvars
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Exportações reais do WhatsApp (dados de terceiros, nunca versionar)
+exports/

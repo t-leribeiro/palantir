@@ -24,6 +24,7 @@ Use `nvm use 22` antes de trabalhar: o `engine-strict` recusa outras versões e 
 Comandos:
 - Ambiente: `npm run setup` (Terraform; gera o `.env`), `npm run db:migrate`, `npm run seed`, `npm run dev:api`, `npm run dev:worker`, `npm run teardown`
 - Importar uma conversa exportada do WhatsApp: `npm run import -- <arquivo.zip|.txt> --conversa "<nome>"`
+- Exports reais do WhatsApp ficam só em `exports/` (fora do git: dados de terceiros, repositório público); `test/unit/whatsapp-export/real-exports.test.ts` roda sobre eles quando existem e só compara contagens
 - Gates rápidos: `npm run typecheck`, `npm run lint` (complexidade ≤ 10), `npm run arch`, `npm run contracts:check`, `npm test`
 - Com Docker: `npm run test:integration`, `npm run test:e2e`, `npm run test:mutation`, `npm run security`, `npm run eval`, `npm run test:load`
 - DoR local completa: `npm run dor`

@@ -1,0 +1,10 @@
+22/11/2026 09:00 - As mensagens e ligações são protegidas com a criptografia de ponta a ponta. Somente as pessoas que fazem parte da conversa podem ler, ouvir ou compartilhar esse conteúdo.
+22/11/2026 09:01 - Diego: Segue o que rolou na outra conversa:
+[20/11/2026 14:10] Bia Souza: Alguém viu o alerta do Kafka?
+[20/11/2026 14:12] Caio: Era o disco cheio no broker 2
+22/11/2026 09:02 - Ana: 
+22/11/2026 09:02 - Ana: ‎IMG-20261122-WA0001.jpg (arquivo anexado)
+22/11/2026 09:03 - Ana: Mensagem apagada
+22/11/2026 09:04 - Ana: Corrigindo: o broker era o 3 <Mensagem editada>
+22/11/2026 09:05 - ~ Rafa: Valeu pela ajuda
+22/11/2026 09:06 - +55 11 98888-7777: Alguém testou o Karpenter?

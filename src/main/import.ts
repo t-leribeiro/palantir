@@ -72,7 +72,7 @@ export function formatReport(report: ImportReport): string {
     `Período: ${period}`,
     `Mensagens importadas: ${number.format(report.imported)}`,
     `Já existentes (reimportação): ${number.format(report.existing)}`,
-    `Mensagens de sistema ignoradas: ${number.format(report.systemIgnored)}`,
+    `Mensagens de sistema ou sem texto ignoradas: ${number.format(report.systemIgnored)}`,
     `Mídias encontradas (tratadas na S4): ${number.format(report.mediaFound)}`,
     `Linhas não reconhecidas: ${number.format(report.unrecognizedLines)}`,
     ...(report.rejected > 0 ? [`Recusadas pelo contrato: ${number.format(report.rejected)}`] : []),
