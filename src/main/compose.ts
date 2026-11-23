@@ -1,19 +1,32 @@
 // Raiz de composição (ADR-0001): o único lugar que liga portas às implementações.
 import type { FastifyInstance } from "fastify";
 import { createFakeChannel, fakeChannelRoutes } from "../channels/fake/index.js";
-import { createOtelWhatsAppObserver } from "../channels/whatsapp/observability.js";
+import type { CapturePorts } from "../channels/whatsapp/capture.js";
+import { createOtelWhatsAppObserver, type ObserverLog } from "../channels/whatsapp/observability.js";
 import type { WhatsAppProvider } from "../channels/whatsapp/provider/provider.js";
-import { createWhatsAppChannel, type WhatsAppChannel, type WhatsAppObserver } from "../channels/whatsapp/whatsapp-channel.js";
-import type { IngestOutcome } from "../contracts/channel/knowledge-channel.js";
+import {
+  createWhatsAppChannel,
+  type InboundReceiptsPort,
+  type WhatsAppChannel,
+  type WhatsAppObserver,
+} from "../channels/whatsapp/whatsapp-channel.js";
+import type { InboundHandler, IngestOutcome } from "../contracts/channel/knowledge-channel.js";
 import { createAskQuestion, createDeterministicAnswerGenerator, createPgInboundReceipts, type UnknownSenderPolicy } from "../modules/agent/index.js";
 import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../modules/identity/index.js";
 import { INDEX_QUEUE, createIngestMessage, createPgUnitOfWork } from "../modules/ingestion/index.js";
 import { createIndexMessage, createPgChunkRepository, type IndexRequest } from "../modules/knowledge/index.js";
 import { createPgSearchIndex, createSearchEvidence } from "../modules/retrieval/index.js";
-import { createIsSourceAuthorized, createPgSourceRepository } from "../modules/sources/index.js";
-import type { AppConfig } from "../platform/config.js";
+import {
+  createIsSourceAuthorized,
+  createPgCaptureRepository,
+  createPgGroupDirectory,
+  createPgSourceRepository,
+  createRouteGroup,
+  createSyncGroupDirectory,
+} from "../modules/sources/index.js";
+import type { AppConfig, CaptureMode } from "../platform/config.js";
 import { checkDatabase, createPool, type Pool } from "../platform/db/index.js";
-import { buildHttpServer } from "../platform/http/server.js";
+import { buildHttpServer, type HealthStatus } from "../platform/http/server.js";
 import { createLogger, type Logger } from "../platform/logging/logger.js";
 import { createJobQueue, type JobQueue, type QueueDefinition } from "../platform/queue/index.js";
 import { createOtelMetrics, seconds, withSpan, type AppMetrics } from "../platform/telemetry/index.js";
@@ -148,22 +161,106 @@ export async function startWorker(config: AppConfig, options: CompositionOptions
 
 export interface WhatsAppHandle {
   readonly channel: WhatsAppChannel;
+  /** Canal só de captura, no modo de dois números (feature 004, D-02). */
+  readonly captureChannel: WhatsAppChannel | undefined;
   readonly server: FastifyInstance;
   close(): Promise<void>;
 }
 
 export interface WhatsAppCompositionOptions extends CompositionOptions {
+  /** Provedor do número do agente; no modo `agent`, também captura. */
   readonly provider: WhatsAppProvider;
+  /** Provedor do número de captura, obrigatório no modo `dedicated`. */
+  readonly captureProvider?: WhatsAppProvider;
   readonly observer?: WhatsAppObserver;
+  readonly captureObserver?: WhatsAppObserver;
 }
 
 const RECEIPT_RETENTION_MS = 7 * 24 * 3600 * 1000;
+const DEDICATED_WITHOUT_PROVIDER = "PALANTIR_WHATSAPP_CAPTURE=dedicated exige o provedor do número de captura.";
+
+/** Portas de captura sobre o módulo `sources` (D-05, D-07): rota por mensagem, sem cache. */
+function buildCapturePorts(pool: Pool): CapturePorts {
+  const directory = createPgGroupDirectory(pool);
+  const route = createRouteGroup(createPgCaptureRepository(pool));
+  return {
+    route,
+    syncGroups: createSyncGroupDirectory(directory),
+    knownGroups: async () => (await directory.list()).filter((g) => !g.leftAt),
+  };
+}
+
+/** Estado da captura no health (interfaces/health-whatsapp.md): `off`, a sessão do agente ou a de captura. */
+function captureState(mode: CaptureMode, agent: WhatsAppChannel, capture: WhatsAppChannel | undefined): HealthStatus {
+  if (mode === "off") return "off";
+  return (capture ?? agent).state();
+}
+
+interface CaptureWiring {
+  readonly ports: CapturePorts | undefined;
+  readonly queue: JobQueue | undefined;
+  readonly ingest: InboundHandler | undefined;
+}
+
+async function wireCapture(config: AppConfig, pool: Pool, metrics: AppMetrics, logger: Logger): Promise<CaptureWiring> {
+  if (config.whatsapp.capture === "off") return { ports: undefined, queue: undefined, ingest: undefined };
+  const queue = createJobQueue(config.databaseUrl, QUEUES);
+  await queue.start();
+  const ingest = buildIngest(pool, queue);
+  return {
+    ports: buildCapturePorts(pool),
+    queue,
+    ingest: (message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))),
+  };
+}
+
+function buildCaptureChannel(options: WhatsAppCompositionOptions, wiring: CaptureWiring, receipts: InboundReceiptsPort, log: ObserverLog): WhatsAppChannel {
+  if (!options.captureProvider || !wiring.ports || !wiring.ingest) throw new Error(DEDICATED_WITHOUT_PROVIDER);
+  const channel = createWhatsAppChannel({
+    provider: options.captureProvider,
+    receipts,
+    observer: options.captureObserver ?? createOtelWhatsAppObserver(undefined, log, "capture"),
+    roles: { answer: false, capture: true },
+    capturePorts: wiring.ports,
+  });
+  channel.onMessage(wiring.ingest);
+  return channel;
+}
+
+/** Número do agente: responde sempre; no modo `agent`, também captura (D-02). */
+function buildAgentChannel(options: WhatsAppCompositionOptions, mode: CaptureMode, wiring: CaptureWiring, receipts: InboundReceiptsPort, log: ObserverLog): WhatsAppChannel {
+  const captures = mode === "agent" && wiring.ports !== undefined;
+  const channel = createWhatsAppChannel({
+    provider: options.provider,
+    receipts,
+    observer: options.observer ?? createOtelWhatsAppObserver(undefined, log, "agent"),
+    roles: { answer: true, capture: captures },
+    ...(captures ? { capturePorts: wiring.ports } : {}),
+  });
+  if (captures && wiring.ingest) channel.onMessage(wiring.ingest);
+  return channel;
+}
+
+/** Pergunta ao agente com trace, métrica e log sem conteúdo (só resultado e quantidade de citações). */
+function answerWith(ask: ReturnType<typeof buildAsk>, metrics: AppMetrics, logger: Logger) {
+  return (message: Parameters<ReturnType<typeof buildAsk>>[0]) =>
+    withSpan("agent.ask", async () => {
+      const started = performance.now();
+      const reply = await ask(message);
+      metrics.ask(reply?.outcome ?? "silent", seconds(started));
+      logger.info({ outcome: reply?.outcome ?? "silent", citations: reply?.citations.length ?? 0 }, "mensagem ao agente pelo WhatsApp tratada");
+      return reply;
+    });
+}
 
 /**
- * Processo do número do agente (feature 003, D-04): só conversa, não ingere. Remetente desconhecido não
- * recebe nada (política "silent", RF-05); health com o estado da sessão (RF-11).
+ * Processo do WhatsApp (feature 003, D-04; feature 004, D-01, D-02, D-14). O número do agente responde;
+ * com a captura em `agent` ele também captura grupos autorizados; em `dedicated`, um segundo número só
+ * captura. Remetente desconhecido não recebe nada (política "silent"); health com o estado das sessões.
  */
 export async function buildWhatsApp(config: AppConfig, options: WhatsAppCompositionOptions): Promise<WhatsAppHandle> {
+  // Antes de abrir banco e fila: configuração incompleta não pode deixar conexões abertas.
+  if (config.whatsapp.capture === "dedicated" && !options.captureProvider) throw new Error(DEDICATED_WITHOUT_PROVIDER);
   const pool = createPool(config.databaseUrl);
   const logger = options.logger ?? createLogger({ level: config.logLevel, exportToOtel: Boolean(config.otlpEndpoint) });
   const metrics = options.metrics ?? createOtelMetrics();
@@ -171,26 +268,27 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   const purged = await receipts.purgeOlderThan(new Date(Date.now() - RECEIPT_RETENTION_MS));
   const ask = buildAsk(config, pool, "silent");
   const log = { info: (m: string) => logger.info(m), warn: (m: string) => logger.warn(m), error: (m: string) => logger.error(m) };
-  const observer = options.observer ?? createOtelWhatsAppObserver(undefined, log);
-  const channel = createWhatsAppChannel({ provider: options.provider, receipts, observer });
-  channel.onAgentMessage((message) =>
-    withSpan("agent.ask", async () => {
-      const started = performance.now();
-      const reply = await ask(message);
-      metrics.ask(reply?.outcome ?? "silent", seconds(started));
-      logger.info({ outcome: reply?.outcome ?? "silent", citations: reply?.citations.length ?? 0 }, "mensagem ao agente pelo WhatsApp tratada");
-      return reply;
-    }),
-  );
-  const server = await buildHttpServer({ logger, health: async () => ({ db: await checkDatabase(pool), whatsapp: channel.state() }) });
+  const mode = config.whatsapp.capture;
+  const wiring = await wireCapture(config, pool, metrics, logger);
+  const channel = buildAgentChannel(options, mode, wiring, receipts, log);
+  const captureChannel = mode === "dedicated" ? buildCaptureChannel(options, wiring, receipts, log) : undefined;
+  channel.onAgentMessage(answerWith(ask, metrics, logger));
+  const server = await buildHttpServer({
+    logger,
+    health: async () => ({ db: await checkDatabase(pool), whatsapp: channel.state(), capture: captureState(mode, channel, captureChannel) }),
+  });
   await channel.connect();
-  logger.info({ purgedReceipts: purged }, "canal WhatsApp iniciado");
+  await captureChannel?.connect();
+  logger.info({ purgedReceipts: purged, capture: mode }, "canal WhatsApp iniciado");
   return {
     channel,
+    captureChannel,
     server,
     async close() {
       await channel.disconnect();
+      await captureChannel?.disconnect();
       await server.close();
+      await wiring.queue?.stop();
       await pool.end();
     },
   };

@@ -2,7 +2,7 @@
   "uid": "palantir-whatsapp",
   "title": "Palantír / WhatsApp (número do agente)",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "time": {
     "from": "now-6h",
     "to": "now"
@@ -16,7 +16,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Estado da sessão",
+      "title": "Estado da sessão do agente",
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -59,7 +59,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(whatsapp_session_state{state=\"pairing\"}) * 1 + max(whatsapp_session_state{state=\"connected\"}) * 2 + max(whatsapp_session_state{state=\"reconnecting\"}) * 3 + max(whatsapp_session_state{state=\"logged_out\"}) * 4",
+          "expr": "max(whatsapp_session_state{role=\"agent\",state=\"pairing\"}) * 1 + max(whatsapp_session_state{role=\"agent\",state=\"connected\"}) * 2 + max(whatsapp_session_state{role=\"agent\",state=\"reconnecting\"}) * 3 + max(whatsapp_session_state{role=\"agent\",state=\"logged_out\"}) * 4",
           "legendFormat": "estado"
         }
       ],
@@ -242,6 +242,146 @@
           "refId": "A",
           "expr": "histogram_quantile(0.95, sum by (le) (rate(agent_ask_duration_seconds_bucket[5m])))",
           "legendFormat": "P95"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Estado da captura (sessão de captura no modo de dois números)",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(whatsapp_session_state{role=\"capture\",state=\"connected\"}) * 2 + max(whatsapp_session_state{role=\"capture\",state=\"reconnecting\"}) * 3 + max(whatsapp_session_state{role=\"capture\",state=\"logged_out\"}) * 4 + max(whatsapp_session_state{role=\"capture\",state=\"pairing\"}) * 1",
+          "legendFormat": "captura"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Mensagens capturadas por resultado (por minuto)",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(whatsapp_captured_total[5m])) * 60",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Descartadas pela captura por motivo (última hora)",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (increase(whatsapp_capture_discarded_total[1h]))",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Mídias ignoradas por tipo (última hora, S4)",
+      "gridPos": {
+        "x": 18,
+        "y": 24,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (kind) (increase(whatsapp_capture_ignored_media_total[1h]))",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Reconciliadas ao vivo × importadas (última hora)",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ingestion_messages_total{outcome=\"reconciled\"}[1h]))",
+          "legendFormat": "reconciliadas"
         }
       ]
     }

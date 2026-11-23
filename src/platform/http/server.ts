@@ -9,9 +9,10 @@ import type { Logger } from "../logging/logger.js";
 import { componentSchema } from "./openapi.js";
 
 /** Estado de cada dependência; os estados de sessão vêm do canal WhatsApp (feature 003). */
-export type HealthStatus = "ok" | "fail" | "pairing" | "connected" | "reconnecting" | "logged_out";
+export type HealthStatus = "ok" | "fail" | "off" | "pairing" | "connected" | "reconnecting" | "logged_out";
 export type HealthChecks = () => Promise<Record<string, HealthStatus>>;
-const HEALTHY: readonly HealthStatus[] = ["ok", "connected"];
+// "off": componente desligado por configuração (captura da feature 004) não degrada o processo.
+const HEALTHY: readonly HealthStatus[] = ["ok", "connected", "off"];
 
 export interface HttpServerOptions {
   readonly health: HealthChecks;

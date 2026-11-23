@@ -10,14 +10,15 @@ import makeWASocket, {
   proto,
   type AuthenticationCreds,
   type AuthenticationState,
+  type GroupMetadata,
   type SignalDataSet,
   type SignalDataTypeMap,
   type WAMessage,
   type WAMessageKey,
 } from "baileys";
 import { SessionFileError, type EncryptedFileStore } from "../session/encrypted-file-store.js";
-import { backoffMs, classifyContent, isIgnoredJid, phoneFromJid, textOf } from "./mapping.js";
-import type { IncomingDirect, SessionState, WhatsAppProvider } from "./provider.js";
+import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, lidFromJid, phoneFromJid, textOf } from "./mapping.js";
+import type { GroupInfo, IncomingDirect, IncomingGroupMessage, SessionState, WhatsAppProvider } from "./provider.js";
 
 type Socket = ReturnType<typeof makeWASocket>;
 type SocketLogger = NonNullable<Parameters<typeof makeWASocket>[0]["logger"]>;
@@ -123,13 +124,29 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 export interface BaileysProviderOptions {
   readonly store: EncryptedFileStore;
   readonly log: ProviderLog;
+  /** Captura ligada (feature 004, D-03): grupos passam a ser entregues em `onGroupMessage`. */
+  readonly acceptGroups?: boolean;
+}
+
+function groupInfo(meta: Pick<GroupMetadata, "id" | "subject" | "size" | "participants">): GroupInfo {
+  return { groupId: meta.id, subject: meta.subject, participants: meta.size ?? meta.participants?.length ?? 0 };
+}
+
+function contentOf(message: WAMessage): { kind: ReturnType<typeof classifyContent>; text: string | undefined } {
+  const content = normalizeMessageContent(message.message) as Record<string, unknown> | undefined;
+  const kind = classifyContent(content);
+  return { kind, text: kind === "text" ? textOf(content) : undefined };
 }
 
 export function createBaileysProvider(options: BaileysProviderOptions): WhatsAppProvider {
   const { store, log } = options;
+  const acceptGroups = options.acceptGroups ?? false;
   const qrListeners: ((qr: string) => void)[] = [];
   const stateListeners: ((state: SessionState, reason?: string) => void)[] = [];
   let onDirect: ((message: IncomingDirect) => Promise<void>) | undefined;
+  let onGroup: ((message: IncomingGroupMessage) => Promise<void>) | undefined;
+  const groupListeners: ((groups: readonly GroupInfo[], complete: boolean) => void)[] = [];
+  let refreshing = false;
   let socket: Socket | undefined;
   // Estado de autenticação em memória, lido do arquivo só na primeira conexão. As reconexões reutilizam
   // este objeto: o arquivo pode estar atrasado (gravação agrupada) logo depois do pareamento, e reabrir
@@ -158,13 +175,40 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
     return phoneFromJid(await socket.signalRepository.lidMapping.getPNForLID(key.remoteJid));
   }
 
+  /** Autor de grupo: número em `participant` ou `participantAlt`; LID mapeado; senão só o LID (D-11). */
+  async function resolveParticipant(key: WAMessageKey): Promise<{ phone: string | null; lid?: string }> {
+    const direct = phoneFromJid(key.participant) ?? phoneFromJid(key.participantAlt);
+    if (direct) return { phone: direct };
+    const lid = lidFromJid(key.participant) ?? lidFromJid(key.participantAlt);
+    if (!lid) return { phone: null };
+    const lidJid = key.participant?.endsWith("@lid") ? key.participant : key.participantAlt;
+    const mapped = socket && lidJid ? phoneFromJid(await socket.signalRepository.lidMapping.getPNForLID(lidJid)) : null;
+    return mapped ? { phone: mapped } : { phone: null, lid };
+  }
+
+  async function toGroup(message: WAMessage): Promise<IncomingGroupMessage | null> {
+    const { key } = message;
+    if (!key.remoteJid || key.fromMe || !key.id) return null;
+    const { kind, text } = contentOf(message);
+    if (kind === "ignore") return null;
+    const author = await resolveParticipant(key);
+    return {
+      id: key.id,
+      groupId: key.remoteJid,
+      senderPhone: author.phone,
+      ...(author.lid ? { senderLid: author.lid } : {}),
+      ...(message.pushName ? { senderName: message.pushName } : {}),
+      kind,
+      ...(text ? { text } : {}),
+      sentAt: timestampOf(message),
+    };
+  }
+
   async function toDirect(message: WAMessage): Promise<IncomingDirect | null> {
     const { key } = message;
     if (!key.remoteJid || key.fromMe || isIgnoredJid(key.remoteJid)) return null;
-    const content = normalizeMessageContent(message.message) as Record<string, unknown> | undefined;
-    const kind = classifyContent(content);
+    const { kind, text } = contentOf(message);
     if (kind === "ignore" || !key.id) return null;
-    const text = kind === "text" ? textOf(content) : undefined;
     return {
       id: key.id,
       chatJid: key.remoteJid,
@@ -176,12 +220,37 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
     };
   }
 
+  async function dispatch(message: WAMessage): Promise<void> {
+    if (isGroupJid(message.key.remoteJid)) {
+      if (!acceptGroups || !onGroup) return;
+      const group = await toGroup(message);
+      if (group) await onGroup(group);
+      return;
+    }
+    const direct = onDirect ? await toDirect(message) : null;
+    if (direct && onDirect) await onDirect(direct);
+  }
+
+  const emitGroups = (groups: readonly GroupInfo[], complete: boolean) => groupListeners.forEach((listener) => listener(groups, complete));
+
+  /** Lista completa do número: ao conectar e quando o próprio número entra ou sai de um grupo. */
+  async function refreshGroups(): Promise<void> {
+    if (!acceptGroups || !socket || refreshing) return;
+    refreshing = true;
+    try {
+      emitGroups(Object.values(await socket.groupFetchAllParticipating()).map(groupInfo), true);
+    } catch {
+      log.warn("não foi possível atualizar a lista de grupos");
+    } finally {
+      refreshing = false;
+    }
+  }
+
   async function onUpsert(update: { messages: WAMessage[]; type: string }): Promise<void> {
-    if (update.type !== "notify" || !onDirect) return;
+    if (update.type !== "notify") return;
     for (const message of update.messages) {
       try {
-        const direct = await toDirect(message);
-        if (direct) await onDirect(direct);
+        await dispatch(message);
       } catch (error) {
         log.error(`falha ao tratar mensagem recebida (${(error as Error).name})`);
       }
@@ -216,11 +285,18 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
       logger,
       markOnlineOnConnect: false,
       syncFullHistory: false,
-      shouldIgnoreJid: isIgnoredJid,
+      shouldIgnoreJid: (jid) => isIgnoredJid(jid, acceptGroups),
       getMessage: async () => undefined,
     });
     socket.ev.on("creds.update", current.saveCreds);
     socket.ev.on("messages.upsert", (update) => void onUpsert(update));
+    if (acceptGroups) {
+      socket.ev.on("groups.upsert", (groups) => emitGroups(groups.map(groupInfo), false));
+      socket.ev.on("groups.update", () => void refreshGroups());
+      socket.ev.on("group-participants.update", (event) => {
+        if (event.action === "add" || event.action === "remove") void refreshGroups();
+      });
+    }
     socket.ev.on("connection.update", (update) => {
       if (update.qr) {
         emitState("pairing");
@@ -230,6 +306,7 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
         attempt = 0;
         log.info("WhatsApp conectado");
         emitState("connected");
+        void refreshGroups();
       }
       if (update.connection === "close") void onClose(update.lastDisconnect?.error);
     });
@@ -252,7 +329,16 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
     onDirectMessage(listener) {
       onDirect = listener;
     },
+    onGroupMessage(listener) {
+      onGroup = listener;
+    },
+    onGroupsChanged: (listener) => void groupListeners.push(listener),
+    async listGroups() {
+      if (!socket) throw new Error("WhatsApp desconectado");
+      return Object.values(await socket.groupFetchAllParticipating()).map(groupInfo);
+    },
     async sendText(chatJid, text) {
+      if (isGroupJid(chatJid)) throw new Error("envio a grupo bloqueado");
       if (!socket) throw new Error("WhatsApp desconectado");
       await withTimeout(socket.sendMessage(chatJid, { text }), SEND_TIMEOUT_MS);
     },

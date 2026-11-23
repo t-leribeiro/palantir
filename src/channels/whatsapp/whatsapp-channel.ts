@@ -1,16 +1,19 @@
-// Adaptador KnowledgeChannel do número do agente (feature 003). Só conversa: não captura conversas (RN-01,
-// D-19). Recibo antes de responder (D-13), mensagens antigas ignoradas, `null` do agente = silêncio (RF-05),
-// resposta renderizada (D-11) e espaçada por destinatário (D-12).
+// Adaptador KnowledgeChannel do WhatsApp. Papel `answer` (feature 003): mensagens diretas viram perguntas ao
+// agente, com recibo antes de responder (D-13), mensagens antigas ignoradas, `null` = silêncio (RF-05), resposta
+// renderizada (D-11) e espaçada (D-12). Papel `capture` (feature 004, D-02): mensagens de grupos autorizados
+// viram CanonicalMessage `live` (capture.ts). No modo de um número, o mesmo canal tem os dois papéis.
 import type {
   AgentHandler,
   AgentReply,
   CanonicalMessage,
   ChannelCapabilities,
+  InboundHandler,
   KnowledgeChannel,
 } from "../../contracts/channel/knowledge-channel.js";
 import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
 import { newId, systemClock, type Clock, type IdGenerator } from "../../shared/index.js";
+import { createGroupCapture, type CaptureObserver, type CapturePorts } from "./capture.js";
 import { createSendPacer, systemPacerClock, type PacerClock, type SendPacer } from "./pacer.js";
 import type { DirectKind, IncomingDirect, SessionState, WhatsAppProvider } from "./provider/provider.js";
 import { WHATSAPP_MAX_MESSAGE_LENGTH, renderForWhatsApp } from "./render.js";
@@ -22,8 +25,8 @@ export const AGENT_ACCOUNT_ID = "agent";
 const STALE_AFTER_MS = 10 * 60_000;
 const DEFAULT_RETRY_DELAYS_MS = [1000, 2000];
 
-/** Eventos para métricas (D-18). Nunca recebem número nem texto. */
-export interface WhatsAppObserver {
+/** Eventos para métricas (D-18 da S2, D-16 da S3). Nunca recebem número nem texto. */
+export interface WhatsAppObserver extends CaptureObserver {
   received(kind: DirectKind | "stale" | "duplicate"): void;
   replied(parts: number): void;
   unknownSender(reason: "unknown" | "unresolved"): void;
@@ -39,7 +42,18 @@ const noopObserver: WhatsAppObserver = {
   sendFailed: () => undefined,
   handlerFailed: () => undefined,
   state: () => undefined,
+  captured: () => undefined,
+  captureDiscarded: () => undefined,
+  captureIgnoredMedia: () => undefined,
 };
+
+/** Papéis do canal (D-02): responder ao dono, capturar grupos autorizados, ou os dois (modo de um número). */
+export interface WhatsAppRoles {
+  readonly answer: boolean;
+  readonly capture: boolean;
+}
+
+const ANSWER_ONLY: WhatsAppRoles = { answer: true, capture: false };
 
 export interface InboundReceiptsPort {
   registerIfNew(provider: string, externalMessageId: string): Promise<boolean>;
@@ -56,18 +70,21 @@ export interface WhatsAppChannelOptions {
   readonly pacerClock?: PacerClock;
   /** Esperas entre tentativas de envio; o total de tentativas é o tamanho da lista + 1. */
   readonly sendRetryDelaysMs?: readonly number[];
+  /** Padrão: só responder (S2). Com `capture`, `capturePorts` é obrigatório. */
+  readonly roles?: WhatsAppRoles;
+  readonly capturePorts?: CapturePorts;
 }
 
 export interface WhatsAppChannel extends KnowledgeChannel {
   state(): SessionState;
 }
 
-const CAPABILITIES: ChannelCapabilities = {
-  supportsLiveCapture: false,
+const capabilitiesFor = (roles: WhatsAppRoles): ChannelCapabilities => ({
+  supportsLiveCapture: roles.capture,
   supportsHistory: false,
   supportsMedia: false,
   maxMessageLength: WHATSAPP_MAX_MESSAGE_LENGTH,
-};
+});
 
 const CONTRACT_KIND: Record<DirectKind, CanonicalMessage["kind"]> = {
   text: "text",
@@ -84,14 +101,33 @@ export function toChatJid(destination: string): string {
   return destination.includes("@") ? destination : `${destination.replace(/\D/g, "")}@s.whatsapp.net`;
 }
 
+/** Padrões de envio (ritmo e tentativas). */
+function sendDefaults(options: WhatsAppChannelOptions) {
+  return {
+    pacer: options.pacer ?? createSendPacer({ minIntervalMs: options.pacerIntervalMs ?? 1000, clock: options.pacerClock ?? systemPacerClock }),
+    retryDelays: options.sendRetryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
+  };
+}
+
+/** Padrões das opções, fora da fábrica para manter a complexidade dela baixa. */
+function resolveOptions(options: WhatsAppChannelOptions) {
+  const roles = options.roles ?? ANSWER_ONLY;
+  if (roles.capture && !options.capturePorts) throw new Error("O papel de captura exige as portas de captura.");
+  return {
+    ...sendDefaults(options),
+    observer: options.observer ?? noopObserver,
+    clock: options.clock ?? systemClock,
+    ids: options.ids ?? newId,
+    roles,
+    capturePorts: roles.capture ? options.capturePorts : undefined,
+  };
+}
+
 export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsAppChannel {
   const { provider, receipts } = options;
-  const observer = options.observer ?? noopObserver;
-  const clock = options.clock ?? systemClock;
-  const ids = options.ids ?? newId;
-  const pacer = options.pacer ?? createSendPacer({ minIntervalMs: options.pacerIntervalMs ?? 1000, clock: options.pacerClock ?? systemPacerClock });
-  const retryDelays = options.sendRetryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+  const { observer, clock, ids, pacer, retryDelays, roles, capturePorts } = resolveOptions(options);
   let onAgent: AgentHandler | undefined;
+  let onInbound: InboundHandler | undefined;
   let current: SessionState = "pairing";
   let started = false;
 
@@ -167,6 +203,11 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
   }
 
   async function handleDirect(message: IncomingDirect): Promise<void> {
+    if (!roles.answer) {
+      // Número só de captura (modo de dois números): mensagem direta não vira pergunta nem conhecimento (RN-08).
+      observer.captureDiscarded("direct");
+      return;
+    }
     if (!(await isFreshAndNew(message))) return;
     if (!message.senderPhone) {
       observer.unknownSender("unresolved");
@@ -184,6 +225,15 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
 
   provider.onDirectMessage(handleDirect);
 
+  if (capturePorts) {
+    provider.onGroupMessage(
+      createGroupCapture({ ports: capturePorts, observer, ids, clock, adapter: WHATSAPP_ADAPTER, inbound: () => onInbound, onError: () => observer.handlerFailed() }),
+    );
+    provider.onGroupsChanged((groups, complete) => {
+      capturePorts.syncGroups(groups, complete).catch(() => observer.handlerFailed());
+    });
+  }
+
   return {
     adapter: WHATSAPP_ADAPTER,
     async connect() {
@@ -196,12 +246,13 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
       started = false;
       await provider.stop();
     },
-    capabilities: () => CAPABILITIES,
+    capabilities: () => capabilitiesFor(roles),
     async listConversations() {
-      return [];
+      if (!capturePorts) return [];
+      return (await capturePorts.knownGroups()).map((g) => ({ conversationId: g.groupId, title: g.subject, kind: "group" as const }));
     },
-    onMessage() {
-      // O número do agente não captura conversas (RN-01); a captura é da S3, por outro número.
+    onMessage(handler) {
+      onInbound = handler;
     },
     onAgentMessage(handler) {
       onAgent = handler;

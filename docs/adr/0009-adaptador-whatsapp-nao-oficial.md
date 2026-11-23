@@ -33,6 +33,13 @@ A fatia S2 leva as perguntas para o WhatsApp: o usuário escreve do número pess
 - Qualquer intenção de distribuir o Palantír: decidir a licença antes (GPL-3.0 transitiva).
 - A S3 (captura) começar: uma segunda sessão, de outro número, com o mesmo isolamento.
 
+## Atualização 2026-11-23: captura de grupos (S3, feature `004`)
+
+- A captura de grupos autorizados entrou no mesmo adaptador, com papéis (`answer`, `capture`) escolhidos por `PALANTIR_WHATSAPP_CAPTURE`: `off` (padrão, igual à S2), `agent` (o número do agente também captura) e `dedicated` (segundo número, sessão própria em `capture-session.enc`, mesma chave).
+- **Modo `agent` é provisório**, enquanto não há o segundo chip. Risco aceito pelo usuário: se o WhatsApp bloquear o número por causa da captura, o agente também para de responder. Rollback: `PALANTIR_WHATSAPP_CAPTURE=off`. Passagem para `dedicated`: parear o segundo chip, sair do grupo com o chip do agente e reautorizar o grupo.
+- Nenhum número escreve em grupos: `sendText` recusa destino `@g.us` no provedor real e no simulado.
+- A biblioteca continua importada só em `baileys-provider.ts`; grupos usam `participant`/`participantAlt`/`lidMapping` para o autor e `groupFetchAllParticipating` para o diretório de grupos.
+
 ## Alternativas consideradas
 
 - `baileys@6.7.24` (linha `legacy`): sem tratamento de LID; remetentes novos chegariam sem número.

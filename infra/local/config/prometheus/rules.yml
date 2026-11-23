@@ -1,20 +1,20 @@
-# Regras de alerta (feature 003, D-18). Sem Alertmanager no ambiente local: os alertas aparecem em
+# Regras de alerta (feature 003, D-18; feature 004, D-16: por papel da sessão). Sem Alertmanager no ambiente local: os alertas aparecem em
 # http://localhost:9090/alerts e no painel "Palantír / WhatsApp".
 groups:
   - name: palantir-whatsapp
     rules:
       - alert: WhatsAppLoggedOut
-        expr: max(whatsapp_session_state{state="logged_out"}) == 1
+        expr: max by (role) (whatsapp_session_state{state="logged_out"}) == 1
         labels:
           severity: critical
         annotations:
-          summary: O WhatsApp desconectou o número do agente
-          description: Pareie de novo com npm run dev:whatsapp e leia o QR Code com o celular do chip.
+          summary: O WhatsApp desconectou o número ({{ $labels.role }})
+          description: Pareie de novo com npm run dev:whatsapp e leia o QR Code com o celular desse número (agent = chip do agente; capture = número de captura).
       - alert: WhatsAppReconnectingTooLong
-        expr: max(whatsapp_session_state{state="reconnecting"}) == 1
+        expr: max by (role) (whatsapp_session_state{state="reconnecting"}) == 1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: O número do agente está reconectando há mais de 5 minutos
+          summary: O número ({{ $labels.role }}) está reconectando há mais de 5 minutos
           description: Verifique a internet do computador e o celular do chip.

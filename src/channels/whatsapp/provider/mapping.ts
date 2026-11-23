@@ -4,7 +4,9 @@ import { normalizePhone } from "../../../shared/index.js";
 import type { DirectKind } from "./provider.js";
 
 const PHONE_JID = /^(\d+)(?::\d+)?@s\.whatsapp\.net$/;
-const IGNORED_SUFFIXES = ["@g.us", "@broadcast", "@newsletter"];
+const LID_JID = /^(\d+)(?::\d+)?@lid$/;
+const GROUP_SUFFIX = "@g.us";
+const ALWAYS_IGNORED = ["@broadcast", "@newsletter"];
 
 /** Número do remetente a partir de um JID de telefone; LID, grupo e vazio devolvem `null`. */
 export function phoneFromJid(jid: string | null | undefined): string | null {
@@ -12,9 +14,23 @@ export function phoneFromJid(jid: string | null | undefined): string | null {
   return match?.[1] ? normalizePhone(match[1]) : null;
 }
 
-/** O número do agente só conversa 1:1: grupos, listas de transmissão, status e canais ficam de fora (RN-01). */
-export function isIgnoredJid(jid: string): boolean {
-  return IGNORED_SUFFIXES.some((suffix) => jid.endsWith(suffix));
+export function isGroupJid(jid: string | null | undefined): boolean {
+  return Boolean(jid?.endsWith(GROUP_SUFFIX));
+}
+
+/**
+ * Listas de transmissão, status e canais ficam sempre de fora. Grupos só entram com a captura ligada
+ * (feature 004, D-03); sem ela, o número do agente só conversa 1:1 (RN-01 da S2).
+ */
+export function isIgnoredJid(jid: string, acceptGroups = false): boolean {
+  if (isGroupJid(jid)) return !acceptGroups;
+  return ALWAYS_IGNORED.some((suffix) => jid.endsWith(suffix));
+}
+
+/** "lid:<id>" a partir de um JID `@lid`; outros devolvem `null`. */
+export function lidFromJid(jid: string | null | undefined): string | null {
+  const match = jid ? LID_JID.exec(jid) : null;
+  return match?.[1] ? `lid:${match[1]}` : null;
 }
 
 type Content = Record<string, unknown> | null | undefined;

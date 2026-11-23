@@ -1,16 +1,10 @@
 {
   "schema-version": 1,
-  "feature-dir": "_reversa_forward/003-perguntar-pelo-whatsapp",
-  "feature-id": "003",
-  "short-name": "perguntar-pelo-whatsapp",
-  "started-at": "2026-11-23T12:05:27-03:00",
+  "feature-dir": "_reversa_forward/004-captura-ao-vivo-grupo-teste",
+  "feature-id": "004",
+  "short-name": "captura-ao-vivo-grupo-teste",
+  "started-at": "2026-11-23T17:10:00-03:00",
   "current-stage": "coding",
-  "stages-completed": [
-    "requirements",
-    "clarify",
-    "plan",
-    "to-do",
-    "coding"
-  ],
+  "stages-completed": ["requirements", "clarify", "plan", "to-do", "coding"],
   "paused-features": []
 }

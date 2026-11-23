@@ -1,6 +1,7 @@
 import type { Queryable } from "../../../platform/db/index.js";
-import type { InsertResult, MessageStore } from "../application/ports.js";
+import type { InsertResult, MessageStore, ReconcileRow } from "../application/ports.js";
 import type { NewMessage } from "../domain/message.js";
+import type { ReconcileDirection } from "../domain/reconcile.js";
 
 /** Grava participante, mensagem e proveniência; duplicata por (fonte, id externo) devolve o id existente. */
 export function createPgMessageStore(db: Queryable): MessageStore {
@@ -43,8 +44,45 @@ export function createPgMessageStore(db: Queryable): MessageStore {
       await addProvenance(db, existingId, message);
       return { status: "duplicate", id: existingId };
     },
+
+    async findByKey(message) {
+      const target = conflictTarget(message);
+      if (!target.value) return undefined;
+      const { rows } = await db.query<{ id: string }>(`SELECT id FROM messages WHERE source_id = $1 AND ${target.column} = $2`, [
+        message.sourceId,
+        target.value,
+      ]);
+      return rows[0]?.id;
+    },
+
+    async reconcileCandidates({ sourceId, direction, from, to }): Promise<readonly ReconcileRow[]> {
+      const missing = MISSING_KEY[direction];
+      const { rows } = await db.query<{ id: string; sent_at: Date; text: string; display_name: string | null }>(
+        `SELECT m.id, m.sent_at, m.text, p.display_name
+           FROM messages m JOIN participants p ON p.id = m.participant_id
+          WHERE m.source_id = $1 AND m.sent_at BETWEEN $2 AND $3
+            AND m.${missing.empty} IS NULL AND m.${missing.present} IS NOT NULL AND m.text IS NOT NULL
+          ORDER BY m.sent_at, m.id
+          FOR UPDATE OF m`,
+        [sourceId, from, to],
+      );
+      return rows.map((r) => ({ id: r.id, sentAt: new Date(r.sent_at), text: r.text, authorName: r.display_name ?? undefined }));
+    },
+
+    async attachReconciled(messageId, message, direction) {
+      const missing = MISSING_KEY[direction];
+      const value = direction === "import_to_live" ? message.importKey : message.externalMessageId;
+      await db.query(`UPDATE messages SET ${missing.empty} = $2 WHERE id = $1 AND ${missing.empty} IS NULL`, [messageId, value]);
+      await addProvenance(db, messageId, message);
+    },
   };
 }
+
+/** Coluna que falta na candidata (e será preenchida) e a que ela já tem, por sentido da reconciliação (D-09). */
+const MISSING_KEY: Record<ReconcileDirection, { readonly empty: string; readonly present: string }> = {
+  import_to_live: { empty: "import_key", present: "external_message_id" },
+  live_to_import: { empty: "external_message_id", present: "import_key" },
+};
 
 /** Alvo do ON CONFLICT: índice parcial do id externo (ao vivo) ou da chave de importação (D-09 da S1). */
 function conflictTarget(message: NewMessage): { onConflict: string; column: string; value: string | null } {

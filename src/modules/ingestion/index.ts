@@ -1,3 +1,4 @@
+export { RECONCILE_WINDOW_MS, normalizeForMatch, type ReconcileDirection } from "./domain/reconcile.js";
 export { toNewMessage, type CaptureMethod, type IngestTarget, type MessageKind, type NewMessage } from "./domain/message.js";
 export type {
   IndexJob,
@@ -5,6 +6,7 @@ export type {
   IngestionTx,
   InsertResult,
   MessageStore,
+  ReconcileRow,
   SourceAuthorization,
   SourceCheck,
   UnitOfWork,

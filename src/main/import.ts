@@ -72,6 +72,7 @@ export function formatReport(report: ImportReport): string {
     `Período: ${period}`,
     `Mensagens importadas: ${number.format(report.imported)}`,
     `Já existentes (reimportação): ${number.format(report.existing)}`,
+    ...(report.reconciled > 0 ? [`Reconciliadas com a captura ao vivo: ${number.format(report.reconciled)}`] : []),
     `Mensagens de sistema ou sem texto ignoradas: ${number.format(report.systemIgnored)}`,
     `Mídias encontradas (tratadas na S4): ${number.format(report.mediaFound)}`,
     `Linhas não reconhecidas: ${number.format(report.unrecognizedLines)}`,

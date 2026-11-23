@@ -11,7 +11,12 @@ export interface WhatsAppConfig {
   readonly sessionKey: Buffer | undefined;
   readonly sessionDir: string;
   readonly healthPort: number;
+  /** Captura de grupos (feature 004, D-01): `agent` usa o número do agente; `dedicated`, um segundo número. */
+  readonly capture: CaptureMode;
 }
+
+export const CAPTURE_MODES = ["off", "agent", "dedicated"] as const;
+export type CaptureMode = (typeof CAPTURE_MODES)[number];
 
 export interface AppConfig {
   readonly role: Role;
@@ -68,6 +73,7 @@ function whatsappConfig(env: Env, problems: string[]): WhatsAppConfig {
     sessionKey,
     sessionDir: env.PALANTIR_WA_SESSION_DIR || join(homedir(), ".palantir", "whatsapp"),
     healthPort: integer(env.PALANTIR_WHATSAPP_HEALTH_PORT ?? "8081", "PALANTIR_WHATSAPP_HEALTH_PORT", 1, 65535, problems),
+    capture: oneOf(env.PALANTIR_WHATSAPP_CAPTURE || "off", CAPTURE_MODES, "PALANTIR_WHATSAPP_CAPTURE", problems),
   };
 }
 

@@ -26,6 +26,10 @@ A fatia S1 (feature `002`) acrescentou `source.importKey` (SHA-256 em hexadecima
 
 A fatia S2 (feature `003`) acrescentou `outcome: "help"` ao `AgentReply`: ajuda curta para cumprimentos e pedidos de ajuda, sem busca e sem citações. É aditiva. A porta `AgentHandler` (TypeScript, fora do schema) passou a devolver `AgentReply | null`, em que `null` significa que o canal não envia nada; a rota de teste responde `204` nesse caso.
 
+## Atualização 2026-11-23: resultado `reconciled` da ingestão
+
+A fatia S3 (feature `004`) acrescentou `reconciled` ao `IngestOutcome` (tipo TypeScript da porta, fora dos schemas): a mensagem chegou pelo outro caminho (ao vivo × importada), casou com uma já gravada e ganhou a chave e a proveniência que faltavam, sem novo registro. A rota de teste responde `200` com `outcome: "reconciled"`. `CanonicalMessage` e `AgentReply` não mudaram: o contrato continua 1.2.0. O canal WhatsApp com papel de captura passa a declarar `supportsLiveCapture: true` e roda os testes de captura da suíte de contrato.
+
 ## Consequências
 
 - Positivas: novo canal sem mudar o núcleo nem o banco; outros adaptadores (até em outra linguagem) podem usar os mesmos schemas.
