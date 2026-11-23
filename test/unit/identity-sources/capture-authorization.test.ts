@@ -1,6 +1,7 @@
 // T006 (feature 004, RN-01, RN-02, RN-05, RN-06; D-04 a D-08): autorização de captura de grupos.
 import { describe, expect, it } from "vitest";
 import {
+  assertSameConversation,
   createCaptureAdmin,
   createRouteGroup,
   createSyncGroupDirectory,
@@ -122,6 +123,15 @@ describe("ordem e referência dos grupos", () => {
   });
 });
 
+describe("assertSameConversation", () => {
+  it("sem --conversa ou com confirmação, não trava; nomes equivalentes passam", () => {
+    expect(() => assertSameConversation({ position: 3, subject: "A" }, undefined, false)).not.toThrow();
+    expect(() => assertSameConversation({ position: 3, subject: "A" }, "B", true)).not.toThrow();
+    expect(() => assertSameConversation({ position: 3, subject: "Grupo  de Teste" }, "grupo de teste", false)).not.toThrow();
+    expect(() => assertSameConversation({ position: 3, subject: "A" }, "B", false)).toThrow('O grupo 3 é "A", mas a conversa é "B".');
+  });
+});
+
 describe("validateConsent", () => {
   it("exige de 10 a 500 caracteres, ignorando espaços nas pontas", () => {
     expect(validateConsent(`  ${CONSENT}  `)).toBe(CONSENT);
@@ -161,7 +171,7 @@ describe("autorizar", () => {
 
   it("com --conversa usa a fonte importada do dono (mesmo id da importação)", async () => {
     const { admin, captures, sources } = setup(undefined, { "u1|export:t3": { sourceId: "src-t3", title: "T3" } });
-    const result = await admin.authorize({ owner: OWNER, group: "2", consent: CONSENT, conversation: "T3" });
+    const result = await admin.authorize({ owner: OWNER, group: "2", consent: CONSENT, conversation: "T3", confirmNameMismatch: true });
     expect(result).toMatchObject({ sourceTitle: "T3", linkedToImport: true });
     expect(captures.records[0]?.sourceId).toBe("src-t3");
     expect(sources.created).toEqual([]);
@@ -169,10 +179,26 @@ describe("autorizar", () => {
 
   it("--conversa inexistente para o dono: recusa sem autorizar", async () => {
     const { admin, captures } = setup();
-    await expect(admin.authorize({ owner: OWNER, group: "2", consent: CONSENT, conversation: "Outra" })).rejects.toThrow(
+    await expect(admin.authorize({ owner: OWNER, group: "2", consent: CONSENT, conversation: "Outra", confirmNameMismatch: true })).rejects.toThrow(
       'Não há conversa importada com o nome "Outra" para este dono.',
     );
     expect(captures.records).toEqual([]);
+  });
+
+  it("nome do grupo diferente da conversa: recusa sem --confirmar, mostrando os dois nomes e o número", async () => {
+    const { admin, captures } = setup(undefined, { "u1|export:casa-sinop": { sourceId: "src-casa", title: "Casa Sinop" } });
+    await expect(admin.authorize({ owner: OWNER, group: "1", consent: CONSENT, conversation: "Casa Sinop" })).rejects.toMatchObject({
+      code: "name_mismatch",
+      message: expect.stringContaining('O grupo 1 é "Família", mas a conversa é "Casa Sinop"'),
+    });
+    await expect(admin.authorize({ owner: OWNER, group: "1", consent: CONSENT, conversation: "Casa Sinop" })).rejects.toThrow(/--confirmar/);
+    expect(captures.records).toEqual([]);
+  });
+
+  it("mesmo nome com outra caixa, acentos ou pontuação dispensa a confirmação", async () => {
+    const { admin, captures } = setup([group("1@g.us", "Casa sinop")], { "u1|export:casa-sinop": { sourceId: "src-casa", title: "Casa Sinop" } });
+    await admin.authorize({ owner: OWNER, group: "1", consent: CONSENT, conversation: "Casa Sinóp!" });
+    expect(captures.records[0]?.sourceId).toBe("src-casa");
   });
 
   it("sem consentimento: recusa antes de tocar em qualquer coisa", async () => {

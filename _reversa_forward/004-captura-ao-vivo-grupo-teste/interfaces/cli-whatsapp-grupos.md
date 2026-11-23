@@ -30,14 +30,15 @@ Para autorizar: npm run whatsapp:grupos -- autorizar <número> --consentimento "
 ## `autorizar`
 
 ```
-npm run whatsapp:grupos -- autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>"] [--dono <provider:conta>]
+npm run whatsapp:grupos -- autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>" [--confirmar]] [--dono <provider:conta>]
 ```
 
 | Parâmetro | Obrigatório | Regra |
 |-----------|-------------|-------|
 | `<grupo>` | sim | Número da listagem atual ou id do grupo (`...@g.us` ou só os dígitos) |
 | `--consentimento` | sim | 10 a 500 caracteres; guardado em `source_captures.consent_statement` |
-| `--conversa` | não | Nome de uma conversa já importada pelo mesmo dono; as mensagens caem na fonte `export:<nome>` |
+| `--conversa` | não | Nome de uma conversa já importada pelo mesmo dono; as mensagens caem na fonte `export:<nome>`. O nome do grupo e o da conversa precisam coincidir (sem diferença de maiúsculas, acentos e pontuação) |
+| `--confirmar` | não | Aceita ligar o grupo a uma conversa de nome diferente (ex.: o grupo foi renomeado). Sem ele, nomes diferentes são recusados |
 | `--dono` | não | Padrão `fake:fake-operator`, igual a `import` e `whatsapp:link` |
 
 Saídas (código 0):
@@ -51,6 +52,7 @@ Erros (código 1, mensagem em português, sem rastreio de pilha):
 | Sem `--consentimento` ou fora do tamanho | "Informe --consentimento com 10 a 500 caracteres: como os participantes foram avisados e consentiram." |
 | Grupo não encontrado no diretório | "Grupo não encontrado. Rode `npm run whatsapp:grupos` para ver a lista atual." |
 | Grupo já autorizado | "O grupo já está autorizado desde <data>. Para trocar a fonte, revogue e autorize de novo." |
+| `--conversa` com nome diferente do grupo, sem `--confirmar` | "O grupo <n> é "<nome do grupo>", mas a conversa é "<nome>". Confira o número na lista; se é isso mesmo (por exemplo, o grupo mudou de nome), repita com --confirmar." |
 | `--conversa` inexistente para o dono | "Não há conversa importada com o nome "<nome>" para este dono." |
 | Dono inexistente | mesma mensagem do `import` |
 

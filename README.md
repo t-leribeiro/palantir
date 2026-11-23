@@ -37,7 +37,7 @@ Importar uma conversa exportada do WhatsApp (S1): `npm run import -- <arquivo.zi
 
 Perguntar pelo WhatsApp (S2): cadastre seu número com `npm run whatsapp:link -- "+55 11 9XXXX-XXXX"`, ligue `PALANTIR_WHATSAPP_ENABLED=true` no `.env` e rode `npm run dev:whatsapp`; leia o QR Code com o celular do chip do agente (roteiro em [`onboarding.md` da 003](_reversa_forward/003-perguntar-pelo-whatsapp/onboarding.md); riscos no [ADR-0009](docs/adr/0009-adaptador-whatsapp-nao-oficial.md)).
 
-Capturar um grupo de teste ao vivo (S3): ligue `PALANTIR_WHATSAPP_CAPTURE=agent` no `.env`, adicione o chip ao grupo, rode `npm run dev:whatsapp` e `npm run dev:worker`, e autorize com `npm run whatsapp:grupos -- autorizar <número> --consentimento "<como os participantes foram avisados>" [--conversa "<nome da importação>"]` (roteiro em [`onboarding.md` da 004](_reversa_forward/004-captura-ao-vivo-grupo-teste/onboarding.md)).
+Capturar um grupo de teste ao vivo (S3): ligue `PALANTIR_WHATSAPP_CAPTURE=agent` no `.env`, adicione o chip ao grupo, rode `npm run dev:whatsapp` e `npm run dev:worker`, e autorize com `npm run whatsapp:grupos -- autorizar <número> --consentimento "<como os participantes foram avisados>" [--conversa "<nome da importação>"]` (o chip precisa ser membro do grupo; nome do grupo diferente do `--conversa` exige `--confirmar`) (roteiro em [`onboarding.md` da 004](_reversa_forward/004-captura-ao-vivo-grupo-teste/onboarding.md)).
 
 Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`onboarding.md`](_reversa_forward/001-walking-skeleton/onboarding.md). `npm run teardown` destrói o ambiente.
 

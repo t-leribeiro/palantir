@@ -87,7 +87,7 @@ describe("autorização de captura com PostgreSQL (T007)", () => {
   });
 
   it("autorizar com --conversa roteia para a fonte importada; a ingestão aceita pelo mesmo id de conversa", async () => {
-    const result = await admin().authorize({ owner: { userId, spaceId }, group: "901@g.us", consent: CONSENT, conversation: "Grupo de teste" });
+    const result = await admin().authorize({ owner: { userId, spaceId }, group: "901@g.us", consent: CONSENT, conversation: "Grupo de teste", confirmNameMismatch: true });
     expect(result).toMatchObject({ subject: "Grupo de teste ao vivo", sourceTitle: "Grupo de teste", linkedToImport: true });
     const route = await createRouteGroup(createPgCaptureRepository(db.pool))("901@g.us");
     expect(route).toMatchObject({ provider: "whatsapp", conversationId: "export:grupo-de-teste", sourceId });
@@ -105,7 +105,7 @@ describe("autorização de captura com PostgreSQL (T007)", () => {
     await admin().revoke("901@g.us");
     expect(await createRouteGroup(createPgCaptureRepository(db.pool))("901@g.us")).toBeNull();
     expect((await admin().list()).groups.find((g) => g.groupId === "901@g.us")?.status.kind).toBe("revoked");
-    await admin().authorize({ owner: { userId, spaceId }, group: "901@g.us", consent: CONSENT, conversation: "Grupo de teste" });
+    await admin().authorize({ owner: { userId, spaceId }, group: "901@g.us", consent: CONSENT, conversation: "Grupo de teste", confirmNameMismatch: true });
     expect((await createRouteGroup(createPgCaptureRepository(db.pool))("901@g.us"))?.sourceId).toBe(sourceId);
   });
 

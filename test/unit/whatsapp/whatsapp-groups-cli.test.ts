@@ -15,8 +15,10 @@ describe("parseGroupsArgs", () => {
       group: "1",
       consent: "todos avisados",
       conversation: "T3",
+      confirm: false,
       owner: { provider: "fake", accountId: "fake-operator" },
     });
+    expect(parseGroupsArgs(["autorizar", "1", "--consentimento", "x", "--conversa", "T3", "--confirmar"])).toMatchObject({ confirm: true });
   });
 
   it("autorizar sem consentimento chega ao caso de uso, que recusa com a mensagem certa", () => {

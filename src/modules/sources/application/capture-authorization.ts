@@ -73,6 +73,8 @@ export interface AuthorizeCaptureInput {
   readonly group: string;
   readonly consent: string;
   readonly conversation?: string;
+  /** Confirma ligar o grupo a uma conversa de nome diferente (ex.: o grupo foi renomeado). */
+  readonly confirmNameMismatch?: boolean;
 }
 
 export interface AuthorizeCaptureResult {
@@ -106,6 +108,24 @@ export function validateConsent(consent: string | undefined): string {
     );
   }
   return text;
+}
+
+/**
+ * Trava contra autorizar o grupo errado: com `--conversa`, o nome do grupo e o da conversa importada precisam
+ * coincidir (sem diferença de maiúsculas, acentos e pontuação), a menos que o operador confirme.
+ */
+export function assertSameConversation(
+  group: { readonly position: number; readonly subject: string },
+  conversation: string | undefined,
+  confirmed: boolean,
+): void {
+  if (conversation === undefined || confirmed) return;
+  const slug = (name: string) => importConversationId(name);
+  if (slug(group.subject) === slug(conversation)) return;
+  throw new DomainError(
+    "name_mismatch",
+    `O grupo ${group.position} é "${group.subject}", mas a conversa é "${conversation}". Confira o número na lista; se é isso mesmo (por exemplo, o grupo mudou de nome), repita com --confirmar.`,
+  );
 }
 
 function statusOf(record: CaptureRecord | undefined): CaptureStatus {
@@ -156,6 +176,7 @@ export function createCaptureAdmin(deps: CaptureAdminDeps) {
     const listing = await list();
     const group = resolveGroupRef(listing.groups, input.group);
     if (group.leftAt) throw new DomainError("group_left", "O número de captura não participa mais deste grupo.");
+    assertSameConversation(group, input.conversation, input.confirmNameMismatch === true);
     if (group.status.kind === "authorized") {
       throw new DomainError("already_authorized", `O grupo já está autorizado desde ${group.status.since.toISOString()}. Para trocar a fonte, revogue e autorize de novo.`);
     }

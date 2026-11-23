@@ -14,3 +14,5 @@
 {"ts": "2026-11-23T17:59:46-03:00", "action": "T014", "status": "done", "files": ["test/e2e/whatsapp-capture.test.ts", "src/main/compose.ts"]}
 {"ts": "2026-11-23T18:01:11-03:00", "action": "T015", "status": "done", "files": ["src/channels/whatsapp/observability.ts", "infra/local/config/grafana/dashboards/whatsapp.json", "infra/local/config/prometheus/rules.yml", "test/unit/whatsapp/observability.test.ts"]}
 {"ts": "2026-11-23T18:01:45-03:00", "action": "T016", "status": "done", "files": ["docs/adr/0009-adaptador-whatsapp-nao-oficial.md", "docs/adr/0004-contrato-do-canal-schema-first.md", "README.md", "CLAUDE.md", "AGENTS.md", "docs/plano-de-fatias.md"]}
+{"ts": "2026-11-23T18:56:01-03:00", "action": "T006", "status": "corrected", "files": ["src/modules/sources/application/capture-authorization.ts", "test/unit/identity-sources/capture-authorization.test.ts", "test/integration/live-capture-sources.test.ts"]}
+{"ts": "2026-11-23T18:56:01-03:00", "action": "T012", "status": "corrected", "files": ["src/main/whatsapp-groups.ts", "test/unit/whatsapp/whatsapp-groups-cli.test.ts", "test/e2e/whatsapp-capture.test.ts"]}

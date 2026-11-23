@@ -1,4 +1,4 @@
-// npm run whatsapp:grupos -- [listar | autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>"] [--dono <provider:conta>] | revogar <grupo>]
+// npm run whatsapp:grupos -- [listar | autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>" [--confirmar]] [--dono <provider:conta>] | revogar <grupo>]
 // Lista, autoriza e revoga a captura de grupos (feature 004, interfaces/cli-whatsapp-grupos.md). Lê e grava só
 // no banco: a lista de grupos vem do processo `npm run dev:whatsapp`, sem segunda conexão com o WhatsApp (D-07).
 import { parseArgs } from "node:util";
@@ -20,7 +20,7 @@ export class UsageError extends Error {}
 const USAGE = [
   "uso:",
   "  npm run whatsapp:grupos                      lista os grupos do número de captura",
-  '  npm run whatsapp:grupos -- autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>"] [--dono <provider:conta>]',
+  '  npm run whatsapp:grupos -- autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>" [--confirmar]] [--dono <provider:conta>]',
   "  npm run whatsapp:grupos -- revogar <grupo>",
   "<grupo> é o número da listagem ou o id do grupo.",
 ].join("\n");
@@ -32,6 +32,7 @@ export type GroupsCommand =
       readonly group: string;
       readonly consent: string;
       readonly conversation?: string;
+      readonly confirm: boolean;
       readonly owner: { readonly provider: string; readonly accountId: string };
     }
   | { readonly action: "revogar"; readonly group: string };
@@ -54,6 +55,7 @@ export function parseGroupsArgs(argv: readonly string[]): GroupsCommand {
     options: {
       consentimento: { type: "string" },
       conversa: { type: "string" },
+      confirmar: { type: "boolean", default: false },
       dono: { type: "string", default: "fake:fake-operator" },
     },
   });
@@ -66,6 +68,7 @@ export function parseGroupsArgs(argv: readonly string[]): GroupsCommand {
     group: requireGroup(group),
     consent: values.consentimento ?? "",
     ...(values.conversa !== undefined ? { conversation: values.conversa } : {}),
+    confirm: values.confirmar,
     owner: ownerOf(values.dono),
   };
 }
@@ -90,6 +93,7 @@ export async function runGroups(command: GroupsCommand, pool: Pool): Promise<Gro
     group: command.group,
     consent: command.consent,
     ...(command.conversation !== undefined ? { conversation: command.conversation } : {}),
+    confirmNameMismatch: command.confirm,
   });
   return { action: "autorizar", result };
 }

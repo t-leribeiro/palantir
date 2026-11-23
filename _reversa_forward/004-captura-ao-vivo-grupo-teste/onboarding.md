@@ -5,7 +5,7 @@ Roteiro para testar a fatia pela primeira vez, partindo de uma máquina sem as f
 ## Antes de começar
 
 - **Grupo de teste:** um grupo pequeno do WhatsApp (até ~10 pessoas) cujos participantes foram avisados de que as mensagens serão guardadas pelo Palantír e concordaram. Anote como e quando o aviso foi feito; você vai declarar isso no comando de autorização.
-- **Celular com o chip do agente**, com o WhatsApp instalado. Nesta fatia ele também captura (modo `agent`). Peça a um administrador para **adicionar o número do chip ao grupo de teste**.
+- **Celular com o chip do agente**, com o WhatsApp instalado. Nesta fatia ele também captura (modo `agent`). Peça a um administrador para **adicionar o número do chip ao grupo de teste**. Atenção: o Palantír enxerga só os grupos **do chip** (o número cujo QR Code você leu no `dev:whatsapp`), nunca os do seu número pessoal. Estar você no grupo não basta: o chip precisa ser membro, e os outros participantes vão vê-lo entrar.
 - **Seu celular pessoal**, de onde você faz as perguntas. Ele também precisa estar no grupo, para mandar mensagens de teste.
 - **Docker Desktop** aberto.
 - **Node 22 ativo:** `node --version` deve mostrar `v22`. Com nvm no Windows: `nvm use 22.23.5`. Com Node 18, os comandos falham com `bad option: --env-file-if-exists`.
@@ -57,7 +57,7 @@ O grupo de teste aparece como "não autorizado". Autorize pelo número da listag
 npm run whatsapp:grupos -- autorizar 1 --consentimento "todos avisados no grupo em 23/11, ninguém se opôs" --conversa "<nome>"
 ```
 
-Sem `--conversa`, o grupo vira uma conversa nova com o nome que ele tem no WhatsApp.
+Sem `--conversa`, o grupo vira uma conversa nova com o nome que ele tem no WhatsApp. Com `--conversa`, o nome do grupo e o da conversa importada precisam coincidir (maiúsculas e acentos não importam); se forem diferentes, o comando recusa e mostra os dois nomes, para você não autorizar o grupo errado. Se o grupo só mudou de nome, repita com `--confirmar`.
 
 ## 6. Ver a captura funcionando
 
@@ -95,7 +95,8 @@ Para voltar a capturar, autorize de novo (passo 5).
 | Sintoma | Causa provável | O que fazer |
 |---------|----------------|-------------|
 | `whatsapp:grupos` diz "Nenhum grupo conhecido" | captura desligada ou processo nunca rodou com ela | `PALANTIR_WHATSAPP_CAPTURE=agent` e `npm run dev:whatsapp` |
-| O grupo não aparece na lista | o chip ainda não foi adicionado ao grupo, ou a lista está antiga | adicione o chip; com o processo no ar, a lista atualiza sozinha |
+| O grupo não aparece na lista | o chip não é membro do grupo (estar o seu número pessoal não basta), ou a lista está antiga | adicione o número do chip ao grupo; com o processo no ar, a lista atualiza sozinha; senão, reinicie o `dev:whatsapp` |
+| `O grupo N é "...", mas a conversa é "..."` | o número da lista não é o do grupo que você queria | confira o número na lista; use `--confirmar` só se o grupo mudou de nome |
 | A pergunta não encontra a mensagem do grupo | worker parado, ou palavras diferentes das usadas no grupo | suba o `dev:worker`; pergunte com palavras da mensagem (busca por palavras até a S6) |
 | `autorizar` recusa o consentimento | texto ausente ou com menos de 10 caracteres | descreva como e quando os participantes foram avisados |
 | `Não há conversa importada com o nome ...` | o `--conversa` não bate com o nome usado no `import` | use exatamente o nome do `npm run import -- ... --conversa` |

@@ -118,9 +118,12 @@ describe("S3: captura ao vivo de um grupo de teste autorizado", () => {
     expect(await countMessages("Kibana")).toBe(0);
   });
 
-  it("autorizar exige consentimento; com ele, liga o grupo à conversa importada", async () => {
+  it("autorizar exige consentimento e confirmação de nome diferente; liga o grupo à conversa importada", async () => {
     await expect(runGroups(parseGroupsArgs(["autorizar", "1"]), db.pool)).rejects.toThrow(/--consentimento/);
-    const result = await runGroups(parseGroupsArgs(["autorizar", "1", "--consentimento", CONSENT, "--conversa", "Grupo de teste"]), db.pool);
+    await expect(runGroups(parseGroupsArgs(["autorizar", "1", "--consentimento", CONSENT, "--conversa", "Grupo de teste"]), db.pool)).rejects.toThrow(
+      /O grupo 1 é "Grupo de teste ao vivo", mas a conversa é "Grupo de teste"/,
+    );
+    const result = await runGroups(parseGroupsArgs(["autorizar", "1", "--consentimento", CONSENT, "--conversa", "Grupo de teste", "--confirmar"]), db.pool);
     expect(result).toMatchObject({ action: "autorizar", result: { sourceTitle: "Grupo de teste", linkedToImport: true } });
   });
 
