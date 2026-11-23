@@ -13,3 +13,12 @@ export {
   type ResolveUserByChannelAccount,
 } from "./application/resolve-user.js";
 export { createPgIdentityRepository } from "./infrastructure/pg-identity-repository.js";
+export {
+  WHATSAPP_PROVIDER,
+  createLinkWhatsAppNumber,
+  type LinkResult,
+  type LinkWhatsAppNumber,
+  type WhatsAppAccountRepository,
+  type WhatsAppAccountRow,
+} from "./application/link-whatsapp-number.js";
+export { createPgWhatsAppAccountRepository } from "./infrastructure/pg-whatsapp-account-repository.js";

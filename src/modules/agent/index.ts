@@ -8,6 +8,7 @@ export {
   notLinkedReply,
   validateCitations,
 } from "./domain/answer.js";
+export { HELP_TEXT, TEXT_ONLY_TEXT, helpReply, isHelpRequest, textOnlyReply } from "./domain/help.js";
 export {
   createAskQuestion,
   createDeterministicAnswerGenerator,
@@ -16,4 +17,7 @@ export {
   type AskQuestionDeps,
   type EvidenceSearch,
   type IdentityResolver,
+  type UnknownSenderPolicy,
 } from "./application/ask-question.js";
+export type { InboundReceipts } from "./application/inbound-receipts.js";
+export { createPgInboundReceipts } from "./infrastructure/pg-inbound-receipts.js";

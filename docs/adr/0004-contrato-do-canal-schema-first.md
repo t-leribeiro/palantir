@@ -22,6 +22,10 @@
 
 A fatia S1 (feature `002`) acrescentou `source.importKey` (SHA-256 em hexadecimal), obrigatório quando `captureMethod = export_import`. É uma mudança aditiva: o núcleo aceita qualquer `1.x`, e adaptadores 1.0.0 continuam válidos. A chave deduplica reimportações sem reaproveitar `externalMessageId`, que fica reservado para a captura ao vivo e para a reconciliação da S3.
 
+## Atualização 2026-11-23: contrato 1.2.0
+
+A fatia S2 (feature `003`) acrescentou `outcome: "help"` ao `AgentReply`: ajuda curta para cumprimentos e pedidos de ajuda, sem busca e sem citações. É aditiva. A porta `AgentHandler` (TypeScript, fora do schema) passou a devolver `AgentReply | null`, em que `null` significa que o canal não envia nada; a rota de teste responde `204` nesse caso.
+
 ## Consequências
 
 - Positivas: novo canal sem mudar o núcleo nem o banco; outros adaptadores (até em outra linguagem) podem usar os mesmos schemas.

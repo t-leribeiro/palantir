@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { mergeEnv } from "./env-file.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dir = `${root}infra/local`;
@@ -43,7 +44,8 @@ function writeEnv() {
       `S3_ENDPOINT=${value("s3_endpoint")}\nS3_BUCKET=${value("s3_bucket")}\n`,
       `S3_ACCESS_KEY=${value("s3_access_key")}\nS3_SECRET_KEY=${value("s3_secret_key")}\n`,
     );
-  writeFileSync(`${root}.env`, content);
+  const previous = existsSync(`${root}.env`) ? readFileSync(`${root}.env`, "utf8") : "";
+  writeFileSync(`${root}.env`, mergeEnv(content, previous));
   console.log(`\n.env gerado. Grafana: ${value("grafana_url")} (usuário admin, senha: terraform -chdir=infra/local output -raw grafana_admin_password)`);
 }
 

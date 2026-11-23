@@ -21,7 +21,8 @@
       "enum": [
         "answered",
         "no_evidence",
-        "error"
+        "error",
+        "help"
       ]
     },
     "citations": {

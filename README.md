@@ -2,12 +2,12 @@
 
 Personal Knowledge Agent: transforma conversas dispersas (grupos do WhatsApp, incluindo áudios) em uma memória pesquisável, consultada pelo próprio canal, com a fonte de cada resposta. WhatsApp-first, not WhatsApp-only.
 
-Estado: **S1 entregue** (feature `002`): importar uma conversa exportada do WhatsApp e perguntar sobre ela pelo canal de teste, com citação de autor, conversa e data originais. O caminho completo da S0 (feature `001`) segue valendo. WhatsApp ao vivo, áudios e busca semântica vêm nas próximas fatias.
+Estado: **S2 implementada** (feature `003`): perguntar pelo WhatsApp a um número dedicado (chip secundário) e receber a resposta com citação, sobre o histórico importado na S1. Captura de grupos ao vivo, áudios e busca semântica vêm nas próximas fatias.
 
 - Produto: [`_reversa_sdd/prd.md`](_reversa_sdd/prd.md) e specs em [`_reversa_sdd/sdd/`](_reversa_sdd/sdd/)
 - Plano e status das entregas: [`docs/plano-de-fatias.md`](docs/plano-de-fatias.md)
 - Decisões de arquitetura: [`docs/adr/`](docs/adr/README.md)
-- Feature atual: [`_reversa_forward/001-walking-skeleton/`](_reversa_forward/001-walking-skeleton/)
+- Feature atual: [`_reversa_forward/003-perguntar-pelo-whatsapp/`](_reversa_forward/003-perguntar-pelo-whatsapp/)
 
 ## Pré-requisitos
 
@@ -35,6 +35,8 @@ npm run dev:worker     # em outro terminal
 
 Importar uma conversa exportada do WhatsApp (S1): `npm run import -- <arquivo.zip|.txt> --conversa "<nome>"` (roteiro em [`onboarding.md` da 002](_reversa_forward/002-perguntar-historico-importado/onboarding.md)).
 
+Perguntar pelo WhatsApp (S2): cadastre seu número com `npm run whatsapp:link -- "+55 11 9XXXX-XXXX"`, ligue `PALANTIR_WHATSAPP_ENABLED=true` no `.env` e rode `npm run dev:whatsapp`; leia o QR Code com o celular do chip do agente (roteiro em [`onboarding.md` da 003](_reversa_forward/003-perguntar-pelo-whatsapp/onboarding.md); riscos no [ADR-0009](docs/adr/0009-adaptador-whatsapp-nao-oficial.md)).
+
 Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`onboarding.md`](_reversa_forward/001-walking-skeleton/onboarding.md). `npm run teardown` destrói o ambiente.
 
 ## Comandos
@@ -52,6 +54,8 @@ Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`
 | `npm run test:mutation` | StrykerJS, limiar 60% |
 | `npm run test:load` | Carga de ingestão (critério de migração do ADR-0003) |
 | `npm run import -- <arquivo> --conversa "<nome>"` | Importa uma conversa exportada do WhatsApp (só texto na S1); reimportar não duplica |
+| `npm run whatsapp:link -- "<número>"` | Cadastra o número pessoal na conta WhatsApp do dono (sem código nesta fatia) |
+| `npm run dev:whatsapp` | Processo do número do agente; desligado por padrão (`PALANTIR_WHATSAPP_ENABLED`) |
 | `npm run eval` | Conjunto de avaliação (`eval/cases.json`): acertos, citações, "não encontrei" |
 | `npm run security` | Semgrep, OSV-Scanner e gitleaks; falha em achado crítico ou alto |
 | `npm run dor` | Todos os itens automáticos da DoR, localmente |

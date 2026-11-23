@@ -9,8 +9,8 @@
 |-------|---------|-------------------------|--------|----|------------------|
 | S0 | `001-walking-skeleton` | Caminho ponta a ponta com canal de teste e todos os gates de qualidade | ✅ entregue (2026-11-23) | #1, #2 | – |
 | S1 | `002-perguntar-historico-importado` | Exportar um grupo real, importar o ZIP (só os textos) e perguntar sobre as conversas antigas pelo canal de teste | ✅ entregue (2026-11-23) | #3, #4 (correções do export real) | – (grupo da demo escolhido na hora) |
-| S2 | – | Perguntar pelo WhatsApp a um número dedicado e receber a resposta com citação, sobre o histórico importado | ⏳ planejada | – | Um número ou dois; chip secundário |
-| S3 | – | Mensagem nova num grupo de teste autorizado aparece nas respostas em segundos, sem duplicar o que veio da importação | ⏳ planejada | – | Grupo de teste e consentimento dos participantes |
+| S2 | `003-perguntar-pelo-whatsapp` | Perguntar pelo WhatsApp a um número dedicado e receber a resposta com citação, sobre o histórico importado | 🔄 em andamento | – | – (decidido em 2026-11-23: dois números; o chip secundário é o do agente) |
+| S3 | – | Mensagem nova num grupo de teste autorizado aparece nas respostas em segundos, sem duplicar o que veio da importação | ⏳ planejada | – | Grupo de teste e consentimento dos participantes; segundo número (captura) |
 | S4 | – | "Em qual áudio alguém falou de X?" devolve o áudio certo, importado ou ao vivo | ⏳ planejada | – | Modelo de transcrição local (com medição) |
 | S5 | – | Listar, autorizar, parar de acompanhar e apagar grupos conversando com o agente, com verificação da conta | ⏳ planejada | – | Base legal na LGPD antes de sair dos grupos de teste |
 | S6 | – | Achar mensagens do mesmo assunto ditas com outras palavras; `npm run eval` mostra a melhora | ⏳ planejada | – | Modelo de embeddings local (com medição) |
@@ -55,3 +55,4 @@ Legenda: ✅ entregue · 🔄 em andamento · ⏳ planejada · ⛔ bloqueada
 | 2026-11-23 | Plano por fatias aprovado, substituindo a sequência por componentes. S1 iniciada como feature `002`. |
 | 2026-11-23 | S1 entregue: importação de conversas exportadas (14 ações, PR #3). 10.000 mensagens em 53,5 s. |
 | 2026-11-23 | Primeiro export real (só local, em `exports/`) expôs 5 defeitos do parser, registrados em `_reversa_bugs/importacao-whatsapp/` e corrigidos no PR #4. |
+| 2026-11-23 | S2 iniciada como feature `003`. Decisão: dois números (agente e captura); o chip secundário é o do agente. 17 ações (acima das ~15 da regra, por ser a primeira integração externa real). |

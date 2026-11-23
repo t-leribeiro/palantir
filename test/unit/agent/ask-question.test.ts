@@ -47,7 +47,13 @@ function setup(opts: { user?: boolean; results?: Evidence[]; lowConfidence?: boo
     },
     generator: opts.generator ?? createDeterministicAnswerGenerator(),
   });
-  return { ask, searches };
+  // Canal de teste: política "reply", então a resposta nunca é null.
+  const answer = async (message: Parameters<typeof ask>[0]) => {
+    const reply = await ask(message);
+    if (!reply) throw new Error("resposta nula inesperada");
+    return reply;
+  };
+  return { ask: answer, searches };
 }
 
 describe("agente: perguntar", () => {

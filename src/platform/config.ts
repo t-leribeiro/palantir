@@ -1,5 +1,17 @@
 // Configuração validada a partir de variáveis de ambiente (segredos só por env, RF-12 da spec).
-export type Role = "api" | "worker";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+export type Role = "api" | "worker" | "whatsapp";
+
+/** Canal WhatsApp (feature 003, D-04 e D-05): processo próprio, sessão criptografada fora do repositório. */
+export interface WhatsAppConfig {
+  readonly enabled: boolean;
+  /** Chave AES-256 (32 bytes) da sessão; obrigatória com o canal ligado. */
+  readonly sessionKey: Buffer | undefined;
+  readonly sessionDir: string;
+  readonly healthPort: number;
+}
 
 export interface AppConfig {
   readonly role: Role;
@@ -9,6 +21,7 @@ export interface AppConfig {
   readonly fakeChannelEnabled: boolean;
   readonly lowConfidenceThreshold: number;
   readonly logLevel: "debug" | "info" | "warn" | "error";
+  readonly whatsapp: WhatsAppConfig;
 }
 
 export class ConfigError extends Error {
@@ -22,12 +35,13 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 export function loadConfig(env: Env = process.env): AppConfig {
   const problems: string[] = [];
-  const role = oneOf(env.PALANTIR_ROLE ?? "api", ["api", "worker"] as const, "PALANTIR_ROLE", problems);
+  const role = oneOf(env.PALANTIR_ROLE ?? "api", ["api", "worker", "whatsapp"] as const, "PALANTIR_ROLE", problems);
   const logLevel = oneOf(env.LOG_LEVEL ?? "info", ["debug", "info", "warn", "error"] as const, "LOG_LEVEL", problems);
   const httpPort = integer(env.PORT ?? "8080", "PORT", 1, 65535, problems);
   const threshold = decimal(env.PALANTIR_LOW_CONFIDENCE_THRESHOLD ?? "0.5", "PALANTIR_LOW_CONFIDENCE_THRESHOLD", problems);
   const databaseUrl = env.DATABASE_URL ?? "";
   if (!/^postgres(ql)?:\/\//.test(databaseUrl)) problems.push("DATABASE_URL deve ser uma URL postgres://");
+  const whatsapp = whatsappConfig(env, problems);
   if (problems.length > 0) throw new ConfigError(problems);
   return {
     role,
@@ -37,7 +51,33 @@ export function loadConfig(env: Env = process.env): AppConfig {
     fakeChannelEnabled: env.PALANTIR_FAKE_CHANNEL === "true",
     lowConfidenceThreshold: threshold,
     logLevel,
+    whatsapp,
   };
+}
+
+const SESSION_KEY_BYTES = 32;
+
+function whatsappConfig(env: Env, problems: string[]): WhatsAppConfig {
+  const enabled = env.PALANTIR_WHATSAPP_ENABLED === "true";
+  const sessionKey = sessionKeyFrom(env.PALANTIR_WA_SESSION_KEY, problems);
+  if (enabled && !sessionKey && !env.PALANTIR_WA_SESSION_KEY) {
+    problems.push("PALANTIR_WA_SESSION_KEY é obrigatória com PALANTIR_WHATSAPP_ENABLED=true (gere com npm run setup)");
+  }
+  return {
+    enabled,
+    sessionKey,
+    sessionDir: env.PALANTIR_WA_SESSION_DIR || join(homedir(), ".palantir", "whatsapp"),
+    healthPort: integer(env.PALANTIR_WHATSAPP_HEALTH_PORT ?? "8081", "PALANTIR_WHATSAPP_HEALTH_PORT", 1, 65535, problems),
+  };
+}
+
+/** Nunca repete o valor da chave na mensagem de erro (segredo). */
+function sessionKeyFrom(value: string | undefined, problems: string[]): Buffer | undefined {
+  if (!value) return undefined;
+  const key = Buffer.from(value, "base64");
+  if (key.length === SESSION_KEY_BYTES) return key;
+  problems.push(`PALANTIR_WA_SESSION_KEY deve ter ${SESSION_KEY_BYTES} bytes em base64`);
+  return undefined;
 }
 
 function oneOf<T extends string>(value: string, allowed: readonly T[], name: string, problems: string[]): T {

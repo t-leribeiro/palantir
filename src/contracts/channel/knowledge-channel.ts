@@ -4,7 +4,7 @@ import type { AgentReply, CanonicalMessage } from "./generated.js";
 
 export type { AgentReply, CanonicalMessage, Citation } from "./generated.js";
 
-export const CONTRACT_VERSION = "1.1.0";
+export const CONTRACT_VERSION = "1.2.0";
 
 export interface ConversationRef {
   readonly conversationId: string;
@@ -36,7 +36,8 @@ export interface ChannelCapabilities {
 }
 
 export type InboundHandler = (message: CanonicalMessage) => Promise<IngestOutcome>;
-export type AgentHandler = (message: CanonicalMessage) => Promise<AgentReply>;
+/** Resposta do agente; `null` = o canal não envia nada (remetente desconhecido com política "silent", RF-05 da S2). */
+export type AgentHandler = (message: CanonicalMessage) => Promise<AgentReply | null>;
 
 export interface KnowledgeChannel {
   /** Nome do adaptador, igual a `provenance.adapter` das mensagens que ele produz. */
