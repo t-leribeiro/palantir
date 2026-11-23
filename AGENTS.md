@@ -17,7 +17,18 @@ Fora do escopo da v0.1: memória coletiva entre usuários, knowledge graph sofis
 
 ## Estado atual
 
-Ainda não existe código: só ideação e requisitos. Comandos de build, lint e teste (incluindo como rodar um teste isolado) entram aqui quando a stack for definida.
+Walking skeleton entregue (feature `001`, ver `_reversa_sdd/addenda/001-walking-skeleton.md`): caminho ponta a ponta com canal de teste, sem WhatsApp real, transcrição nem busca semântica ainda. Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
+
+Use `nvm use 22` antes de trabalhar: o `engine-strict` recusa outras versões e os hooks de commit falham sem ela. `npm run doctor` confere Node, Docker, Terraform, gitleaks e OSV-Scanner.
+
+Comandos:
+- Ambiente: `npm run setup` (Terraform; gera o `.env`), `npm run db:migrate`, `npm run seed`, `npm run dev:api`, `npm run dev:worker`, `npm run teardown`
+- Gates rápidos: `npm run typecheck`, `npm run lint` (complexidade ≤ 10), `npm run arch`, `npm run contracts:check`, `npm test`
+- Com Docker: `npm run test:integration`, `npm run test:e2e`, `npm run test:mutation`, `npm run security`, `npm run eval`, `npm run test:load`
+- DoR local completa: `npm run dor`
+- Um teste isolado: `npx vitest run test/unit/agent/ask-question.test.ts -t "responde com citação"`
+
+Arquitetura (regras verificadas pelo dependency-cruiser): `src/modules/<módulo>/{domain,application,infrastructure}` com API pública só em `index.ts`; o núcleo nunca importa `src/channels/**`; só `src/main` compõe portas e implementações; `src/platform` não importa módulos. Os tipos em `src/contracts/channel/generated.ts` vêm de `contracts/channel/*.schema.json` (`npm run contracts:generate`), nunca são editados à mão. A `main` é protegida: todo merge passa por PR com os 7 jobs de `.github/workflows/pr.yml` verdes.
 
 ## Requisitos de engenharia (fonte: `requirements.md`)
 
@@ -29,6 +40,7 @@ Ainda não existe código: só ideação e requisitos. Comandos de build, lint e
 - **Pre-commit hooks** rodando os testes antes de cada commit.
 - **IaC com Terraform**.
 - **Observabilidade**: Grafana, Prometheus, Tempo (traces) e Loki (logs).
+- **Testes de arquitetura** e **complexidade ciclomática ≤ 10 por função** (requisitos não funcionais definidos pelo usuário, ADR-0005): bloqueiam commit e merge.
 
 ### Definition of Ready (`requirements.md`)
 Uma entrega só está pronta quando tem:
