@@ -11,7 +11,10 @@ export interface ObserverLog {
 
 const STATES: readonly SessionState[] = ["pairing", "connected", "reconnecting", "logged_out"];
 
-export function createOtelWhatsAppObserver(meter: Meter = metrics.getMeter("palantir"), log?: ObserverLog): WhatsAppObserver {
+/** Papel da sessão (feature 004, D-16): `agent` responde (e captura no modo de um número); `capture` só captura. */
+export type SessionRole = "agent" | "capture";
+
+export function createOtelWhatsAppObserver(meter: Meter = metrics.getMeter("palantir"), log?: ObserverLog, role: SessionRole = "agent"): WhatsAppObserver {
   const received = meter.createCounter("whatsapp_messages_received_total", { description: "Mensagens diretas recebidas pelo número do agente" });
   const replies = meter.createCounter("whatsapp_replies_sent_total", { description: "Respostas enviadas" });
   const parts = meter.createCounter("whatsapp_reply_parts_total", { description: "Partes de resposta enviadas" });
@@ -19,14 +22,20 @@ export function createOtelWhatsAppObserver(meter: Meter = metrics.getMeter("pala
   const sendFailures = meter.createCounter("whatsapp_send_failures_total", { description: "Respostas que não puderam ser enviadas" });
   const handlerFailures = meter.createCounter("whatsapp_handler_failures_total", { description: "Falhas ao tratar mensagens" });
   const reconnects = meter.createCounter("whatsapp_reconnects_total", { description: "Quedas seguidas de reconexão" });
+  const captured = meter.createCounter("whatsapp_captured_total", { description: "Mensagens de grupos autorizados entregues à ingestão, por resultado" });
+  const discarded = meter.createCounter("whatsapp_capture_discarded_total", { description: "Mensagens descartadas pela captura, por motivo" });
+  const ignoredMedia = meter.createCounter("whatsapp_capture_ignored_media_total", { description: "Mídias de grupos autorizados contadas e descartadas (S4)" });
   let current: SessionState = "pairing";
   meter
     .createObservableGauge("whatsapp_session_state", { description: "1 no estado atual da sessão, 0 nos demais" })
     .addCallback((result) => {
-      for (const state of STATES) result.observe(state === current ? 1 : 0, { state });
+      for (const state of STATES) result.observe(state === current ? 1 : 0, { state, role });
     });
 
   return {
+    captured: (outcome) => captured.add(1, { outcome }),
+    captureDiscarded: (reason) => discarded.add(1, { reason }),
+    captureIgnoredMedia: (kind) => ignoredMedia.add(1, { kind }),
     received: (kind) => received.add(1, { kind }),
     replied: (count) => {
       replies.add(1);
@@ -46,8 +55,8 @@ export function createOtelWhatsAppObserver(meter: Meter = metrics.getMeter("pala
     },
     state: (state) => {
       current = state;
-      if (state === "reconnecting") reconnects.add(1);
-      const message = `sessão do WhatsApp: ${state}`;
+      if (state === "reconnecting") reconnects.add(1, { role });
+      const message = role === "agent" ? `sessão do WhatsApp: ${state}` : `sessão de captura do WhatsApp: ${state}`;
       if (state === "logged_out") log?.warn(message);
       else log?.info(message);
     },

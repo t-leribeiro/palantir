@@ -26,6 +26,12 @@ describe("mergeEnv", () => {
     expect(merged).toContain("PORT=8080");
   });
 
+  it("mantém o modo de captura do .env anterior (feature 004, D-01)", () => {
+    const merged = mergeEnv(`${generated}PALANTIR_WHATSAPP_CAPTURE=off\n`, "PALANTIR_WHATSAPP_CAPTURE=agent\n", fixedKey);
+    expect(merged).toContain("PALANTIR_WHATSAPP_CAPTURE=agent");
+    expect(merged).not.toContain("PALANTIR_WHATSAPP_CAPTURE=off");
+  });
+
   it("gera a chave quando a anterior está vazia", () => {
     expect(mergeEnv(generated, "PALANTIR_WA_SESSION_KEY=\n", fixedKey)).toContain(`PALANTIR_WA_SESSION_KEY=${fixedKey()}`);
   });

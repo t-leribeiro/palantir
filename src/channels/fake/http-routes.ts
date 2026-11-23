@@ -16,7 +16,8 @@ export function fakeChannelRoutes(channel: FakeChannel): FastifyPluginAsync {
           case "accepted":
             return reply.status(202).send({ outcome: "accepted", messageId: result.messageId });
           case "duplicate":
-            return reply.status(200).send({ outcome: "duplicate", messageId: result.messageId });
+          case "reconciled":
+            return reply.status(200).send({ outcome: result.outcome, messageId: result.messageId });
           default:
             if (result.reason === "invalid") return reply.status(400).send({ error: "contract.invalid", details: result.details ?? [] });
             return reply.status(403).send({ error: "source.not_authorized" });

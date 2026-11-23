@@ -34,6 +34,7 @@ describe("importWhatsAppExport", () => {
       period: { from: new Date("2026-11-10T13:00:00.000Z"), to: new Date("2026-11-11T11:30:00.000Z") },
       imported: 5,
       existing: 0,
+      reconciled: 0,
       rejected: 0,
       systemIgnored: 3,
       mediaFound: 2,
@@ -48,6 +49,15 @@ describe("importWhatsAppExport", () => {
       provenance: { captureMethod: "export_import", adapter: "whatsapp-export" },
     });
     expect(diego?.source.importKey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("mensagens já capturadas ao vivo contam como reconciliadas; a soma fecha com o total de texto (feature 004)", async () => {
+    const { d } = deps();
+    let n = 0;
+    const live: ImportDeps = { ...d, ingest: async (message) => ((n += 1) <= 2 ? { outcome: "reconciled", messageId: "live" } : d.ingest(message)) };
+    const report = await importWhatsAppExport(sample("android-pt-br.txt"), { conversation: "Comunidade DevOps" }, live);
+    expect(report).toMatchObject({ imported: 3, existing: 0, reconciled: 2, rejected: 0 });
+    expect(report.imported + report.existing + report.reconciled).toBe(5);
   });
 
   it("reimportar não grava nada novo", async () => {

@@ -38,6 +38,8 @@ export interface ImportReport {
   readonly period: { readonly from: Date; readonly to: Date } | null;
   readonly imported: number;
   readonly existing: number;
+  /** Já capturadas ao vivo: ganharam a proveniência da importação, sem duplicar (feature 004). */
+  readonly reconciled: number;
   readonly rejected: number;
   readonly systemIgnored: number;
   readonly mediaFound: number;
@@ -53,7 +55,7 @@ export async function importWhatsAppExport(file: string, options: ImportOptions,
 
   const target = await deps.ensureSource(options.conversation);
   const keys = assignImportKeys(parsed.messages.map((m, i) => ({ conversation: target.conversationId, sentAt: at(sentAt, i), author: m.author, text: m.text })));
-  const counts = { accepted: 0, duplicate: 0, rejected: 0 };
+  const counts = { accepted: 0, duplicate: 0, reconciled: 0, rejected: 0 };
   const build = messageBuilder(target, deps.ids ?? newId, deps.clock ?? systemClock);
   for (const [i, message] of parsed.messages.entries()) {
     const outcome = await ingestOne(build(message, at(sentAt, i), keys[i] ?? ""), deps.ingest);
@@ -64,6 +66,7 @@ export async function importWhatsAppExport(file: string, options: ImportOptions,
     period: sentAt.length > 0 ? { from: new Date(Math.min(...sentAt.map(Number))), to: new Date(Math.max(...sentAt.map(Number))) } : null,
     imported: counts.accepted,
     existing: counts.duplicate,
+    reconciled: counts.reconciled,
     rejected: counts.rejected,
     systemIgnored: parsed.systemCount,
     mediaFound: parsed.mediaCount,
@@ -92,7 +95,7 @@ function messageBuilder(target: ImportTarget, ids: IdGenerator, clock: Clock) {
   });
 }
 
-async function ingestOne(message: unknown, ingest: InboundHandler): Promise<{ outcome: "accepted" | "duplicate" | "rejected" }> {
+async function ingestOne(message: unknown, ingest: InboundHandler): Promise<{ outcome: IngestOutcome["outcome"] }> {
   const valid = validateCanonicalMessage(message);
   if (!valid.ok) return { outcome: "rejected" };
   const outcome: IngestOutcome = await ingest(valid.value as CanonicalMessage);

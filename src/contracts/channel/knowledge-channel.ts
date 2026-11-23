@@ -15,6 +15,8 @@ export interface ConversationRef {
 export type IngestOutcome =
   | { readonly outcome: "accepted"; readonly messageId: string }
   | { readonly outcome: "duplicate"; readonly messageId: string }
+  /** Mesma mensagem vinda pelo outro caminho (ao vivo × importada): ganhou a chave e a proveniência (feature 004). */
+  | { readonly outcome: "reconciled"; readonly messageId: string }
   | {
       readonly outcome: "rejected";
       readonly reason: "not_authorized" | "invalid" | "source_deleting";

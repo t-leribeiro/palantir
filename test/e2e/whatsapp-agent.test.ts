@@ -107,7 +107,7 @@ describe("S2: perguntar pelo WhatsApp ao número do agente", () => {
   it("o health mostra o estado da sessão", async () => {
     const ok = await whatsapp.server.inject({ method: "GET", url: "/health" });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toEqual({ status: "ok", checks: { db: "ok", whatsapp: "connected" } });
+    expect(ok.json()).toEqual({ status: "ok", checks: { db: "ok", whatsapp: "connected", capture: "off" } });
     provider.setState("logged_out", "401");
     const down = await whatsapp.server.inject({ method: "GET", url: "/health" });
     expect(down.statusCode).toBe(503);

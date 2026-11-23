@@ -15,7 +15,18 @@ describe("configuração do canal WhatsApp", () => {
       sessionKey: undefined,
       sessionDir: join(homedir(), ".palantir", "whatsapp"),
       healthPort: 8081,
+      capture: "off",
     });
+  });
+
+  it("modo de captura (feature 004, D-01): off por padrão, agent ou dedicated", () => {
+    expect(loadConfig({ ...base, PALANTIR_WHATSAPP_CAPTURE: "agent" }).whatsapp.capture).toBe("agent");
+    expect(loadConfig({ ...base, PALANTIR_WHATSAPP_CAPTURE: "dedicated" }).whatsapp.capture).toBe("dedicated");
+    expect(loadConfig({ ...base, PALANTIR_WHATSAPP_CAPTURE: "" }).whatsapp.capture).toBe("off");
+  });
+
+  it("recusa modo de captura desconhecido, dizendo os valores aceitos", () => {
+    expect(() => loadConfig({ ...base, PALANTIR_WHATSAPP_CAPTURE: "sim" })).toThrow(/PALANTIR_WHATSAPP_CAPTURE deve ser um de: off, agent, dedicated/);
   });
 
   it("aceita o papel whatsapp e lê a chave de 32 bytes em base64", () => {

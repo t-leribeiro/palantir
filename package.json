@@ -37,6 +37,7 @@
     "test:load": "node --import tsx test/load/ingestion.load.ts",
     "import": "node --env-file-if-exists=.env --import tsx src/main/import.ts",
     "whatsapp:link": "node --env-file-if-exists=.env --import tsx src/main/whatsapp-link.ts",
+    "whatsapp:grupos": "node --env-file-if-exists=.env --import tsx src/main/whatsapp-groups.ts",
     "dev:whatsapp": "node --env-file-if-exists=.env --import tsx src/main/whatsapp.ts"
   },
   "devDependencies": {

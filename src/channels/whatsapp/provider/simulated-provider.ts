@@ -1,6 +1,7 @@
 // Provedor WhatsApp simulado (feature 003, D-03): mesma porta do real, sem rede nem número. Usado pela
 // suíte de contrato, pelo E2E e pelos testes do adaptador.
-import type { IncomingDirect, SessionState, WhatsAppProvider } from "./provider.js";
+import { isGroupJid } from "./mapping.js";
+import type { GroupInfo, IncomingDirect, IncomingGroupMessage, SessionState, WhatsAppProvider } from "./provider.js";
 
 export interface SentText {
   readonly chatJid: string;
@@ -10,6 +11,10 @@ export interface SentText {
 export interface SimulatedProvider extends WhatsAppProvider {
   /** Entrega uma mensagem ao adaptador e espera ele terminar de tratá-la (inclusive a resposta). */
   deliver(message: IncomingDirect): Promise<void>;
+  /** Entrega uma mensagem de grupo e espera o adaptador terminar (feature 004). */
+  deliverGroup(message: IncomingGroupMessage): Promise<void>;
+  /** Troca a lista de grupos do número e avisa o adaptador. */
+  setGroups(groups: readonly GroupInfo[], complete?: boolean): void;
   setState(state: SessionState, reason?: string): void;
   emitQr(qr: string): void;
   sent(): readonly SentText[];
@@ -24,6 +29,9 @@ export function createSimulatedProvider(): SimulatedProvider {
   const qrListeners: ((qr: string) => void)[] = [];
   const stateListeners: ((state: SessionState, reason?: string) => void)[] = [];
   let onDirect: ((message: IncomingDirect) => Promise<void>) | undefined;
+  let onGroup: ((message: IncomingGroupMessage) => Promise<void>) | undefined;
+  const groupListeners: ((groups: readonly GroupInfo[], complete: boolean) => void)[] = [];
+  let groups: readonly GroupInfo[] = [];
   let started = false;
   let failures = 0;
 
@@ -41,12 +49,28 @@ export function createSimulatedProvider(): SimulatedProvider {
       onDirect = listener;
     },
     async sendText(chatJid, text) {
+      if (isGroupJid(chatJid)) throw new Error("envio a grupo bloqueado");
       if (!started) throw new Error("provedor simulado parado");
       if (failures > 0) {
         failures -= 1;
         throw new Error("falha simulada de envio");
       }
       sent.push({ chatJid, text });
+    },
+    onGroupMessage(listener) {
+      onGroup = listener;
+    },
+    onGroupsChanged: (listener) => void groupListeners.push(listener),
+    async listGroups() {
+      return groups;
+    },
+    async deliverGroup(message) {
+      if (!onGroup) throw new Error("nenhum listener de mensagem de grupo registrado");
+      await onGroup(message);
+    },
+    setGroups(next, complete = true) {
+      groups = complete ? [...next] : [...groups.filter((g) => !next.some((n) => n.groupId === g.groupId)), ...next];
+      for (const listener of groupListeners) listener(next, complete);
     },
     async deliver(message) {
       if (!onDirect) throw new Error("nenhum listener de mensagem registrado");

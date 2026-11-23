@@ -17,7 +17,7 @@ Fora do escopo da v0.1: memória coletiva entre usuários, knowledge graph sofis
 
 ## Estado atual
 
-S0 (feature `001`) e S1 (feature `002`, importação de conversas exportadas) entregues; S2 (feature `003`, perguntar pelo WhatsApp ao número do agente) implementada e demonstrada com o chip real; adendos em `_reversa_sdd/addenda/`. Ainda sem captura de grupos ao vivo, transcrição nem busca semântica. **Plano e status das entregas: `docs/plano-de-fatias.md`** (atualize o status a cada fatia). Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
+S0 (feature `001`) e S1 (feature `002`, importação de conversas exportadas) entregues; S2 (feature `003`, perguntar pelo WhatsApp ao número do agente) entregue; S3 (feature `004`, captura ao vivo de um grupo de teste autorizado, por enquanto pelo número do agente) implementada, com demonstração manual pendente; adendos em `_reversa_sdd/addenda/`. Ainda sem transcrição nem busca semântica. **Plano e status das entregas: `docs/plano-de-fatias.md`** (atualize o status a cada fatia). Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
 
 Use `nvm use 22` antes de trabalhar: o `engine-strict` recusa outras versões e os hooks de commit falham sem ela. `npm run doctor` confere Node, Docker, Terraform, gitleaks e OSV-Scanner.
 
@@ -25,6 +25,7 @@ Comandos:
 - Ambiente: `npm run setup` (Terraform; gera o `.env`), `npm run db:migrate`, `npm run seed`, `npm run dev:api`, `npm run dev:worker`, `npm run teardown`
 - Importar uma conversa exportada do WhatsApp: `npm run import -- <arquivo.zip|.txt> --conversa "<nome>"`
 - WhatsApp do agente (ADR-0009): `npm run whatsapp:link -- "<número>"` cadastra o número pessoal; `npm run dev:whatsapp` sobe o canal (só com `PALANTIR_WHATSAPP_ENABLED=true`; QR Code no terminal na primeira vez; health em `:8081/health`). A biblioteca não oficial só pode ser importada em `src/channels/whatsapp/provider/baileys-provider.ts` (regra `whatsapp-lib-isolated`); testes usam `simulated-provider.ts`. A sessão fica em `~/.palantir/whatsapp/`, criptografada com `PALANTIR_WA_SESSION_KEY`, que o `npm run setup` gera e preserva
+- Captura de grupos (S3): `PALANTIR_WHATSAPP_CAPTURE` = `off` (padrão), `agent` (o número do agente captura) ou `dedicated` (segundo número, `capture-session.enc`); `npm run whatsapp:grupos` lista, autoriza (`--consentimento` obrigatório, `--conversa` liga à importação) e revoga, lendo só do banco. Nenhum número escreve em grupos; importação e captura do mesmo grupo se reconciliam (mesmo texto em até 60 s)
 - Exports reais do WhatsApp ficam só em `exports/` (fora do git: dados de terceiros, repositório público); `test/unit/whatsapp-export/real-exports.test.ts` roda sobre eles quando existem e só compara contagens
 - Gates rápidos: `npm run typecheck`, `npm run lint` (complexidade ≤ 10), `npm run arch`, `npm run contracts:check`, `npm test`
 - Com Docker: `npm run test:integration`, `npm run test:e2e`, `npm run test:mutation`, `npm run security`, `npm run eval`, `npm run test:load`

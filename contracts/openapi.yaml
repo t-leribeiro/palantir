@@ -108,7 +108,7 @@ components:
         status: { type: string, enum: [ok, degraded] }
         checks:
           type: object
-          additionalProperties: { type: string, enum: [ok, fail, pairing, connected, reconnecting, logged_out] }
+          additionalProperties: { type: string, enum: [ok, fail, "off", pairing, connected, reconnecting, logged_out] }
     FakeInboundRequest:
       type: object
       additionalProperties: false
@@ -126,7 +126,7 @@ components:
       additionalProperties: false
       required: [outcome, messageId]
       properties:
-        outcome: { type: string, enum: [accepted, duplicate] }
+        outcome: { type: string, enum: [accepted, duplicate, reconciled] }
         messageId: { type: string, format: uuid }
     FakeAgentRequest:
       type: object

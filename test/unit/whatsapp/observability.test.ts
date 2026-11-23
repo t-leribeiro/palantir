@@ -68,3 +68,50 @@ describe("createOtelWhatsAppObserver", () => {
     expect(logs).toContain("warn sessão do WhatsApp: logged_out");
   });
 });
+
+describe("captura (feature 004, D-16)", () => {
+  it("conta capturadas por resultado, descartadas por motivo e mídias por tipo", async () => {
+    const { reader, observer } = setup();
+    observer.captured("accepted");
+    observer.captured("accepted");
+    observer.captured("reconciled");
+    observer.captureDiscarded("not_authorized");
+    observer.captureDiscarded("media");
+    observer.captureIgnoredMedia("audio");
+    const metrics = await collect(reader);
+    expect(metrics.get("whatsapp_captured_total")).toEqual(
+      expect.arrayContaining([
+        { attributes: { outcome: "accepted" }, value: 2 },
+        { attributes: { outcome: "reconciled" }, value: 1 },
+      ]),
+    );
+    expect(metrics.get("whatsapp_capture_discarded_total")).toEqual(
+      expect.arrayContaining([
+        { attributes: { reason: "not_authorized" }, value: 1 },
+        { attributes: { reason: "media" }, value: 1 },
+      ]),
+    );
+    expect(metrics.get("whatsapp_capture_ignored_media_total")).toEqual([{ attributes: { kind: "audio" }, value: 1 }]);
+  });
+
+  it("o estado e as reconexões levam o papel da sessão; o log diz qual sessão", async () => {
+    const reader = new TestReader();
+    const meter = new MeterProvider({ readers: [reader] }).getMeter("teste");
+    const logs: string[] = [];
+    const log = { info: (m: string) => void logs.push(m), warn: (m: string) => void logs.push(m), error: (m: string) => void logs.push(m) };
+    createOtelWhatsAppObserver(meter, log).state("connected");
+    const capture = createOtelWhatsAppObserver(meter, log, "capture");
+    capture.state("reconnecting");
+    const metrics = await collect(reader);
+    const state = metrics.get("whatsapp_session_state") ?? [];
+    expect(state).toEqual(
+      expect.arrayContaining([
+        { attributes: { state: "connected", role: "agent" }, value: 1 },
+        { attributes: { state: "reconnecting", role: "capture" }, value: 1 },
+        { attributes: { state: "connected", role: "capture" }, value: 0 },
+      ]),
+    );
+    expect(metrics.get("whatsapp_reconnects_total")).toEqual([{ attributes: { role: "capture" }, value: 1 }]);
+    expect(logs).toEqual(["sessão do WhatsApp: connected", "sessão de captura do WhatsApp: reconnecting"]);
+  });
+});

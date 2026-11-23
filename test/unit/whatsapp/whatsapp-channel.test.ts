@@ -24,6 +24,9 @@ function observerSpy() {
     sendFailed: () => void events.push("sendFailed"),
     handlerFailed: () => void events.push("handlerFailed"),
     state: (state) => void events.push(`state:${state}`),
+    captured: (outcome) => void events.push(`captured:${outcome}`),
+    captureDiscarded: (reason) => void events.push(`discarded:${reason}`),
+    captureIgnoredMedia: (kind) => void events.push(`media:${kind}`),
   };
   return { observer, events };
 }

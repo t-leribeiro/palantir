@@ -1,6 +1,6 @@
 // T013: funções puras do provedor real (D-06, D-14, D-16, D-17).
 import { describe, expect, it } from "vitest";
-import { backoffMs, classifyContent, isIgnoredJid, phoneFromJid, textOf } from "../../../src/channels/whatsapp/provider/mapping.js";
+import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, lidFromJid, phoneFromJid, textOf } from "../../../src/channels/whatsapp/provider/mapping.js";
 
 describe("phoneFromJid", () => {
   it("converte JID de número em E.164, inclusive com dispositivo e sem o nono dígito", () => {
@@ -25,6 +25,29 @@ describe("isIgnoredJid", () => {
   it("aceita conversas 1:1 por número ou LID", () => {
     expect(isIgnoredJid("5511988887777@s.whatsapp.net")).toBe(false);
     expect(isIgnoredJid("123456789012345@lid")).toBe(false);
+  });
+
+  it("com a captura ligada, aceita grupos, mas nunca transmissões, status e canais (feature 004)", () => {
+    expect(isIgnoredJid("120363000000000000@g.us", true)).toBe(false);
+    expect(isIgnoredJid("5511988887777@s.whatsapp.net", true)).toBe(false);
+    for (const jid of ["status@broadcast", "123@broadcast", "1203630000@newsletter"]) expect(isIgnoredJid(jid, true)).toBe(true);
+  });
+});
+
+describe("isGroupJid e lidFromJid (feature 004, D-11)", () => {
+  it("reconhece JID de grupo", () => {
+    expect(isGroupJid("120363000000000000@g.us")).toBe(true);
+    expect(isGroupJid("5511988887777@s.whatsapp.net")).toBe(false);
+    expect(isGroupJid(undefined)).toBe(false);
+    expect(isGroupJid(null)).toBe(false);
+  });
+
+  it("LID vira lid:<id>, com ou sem dispositivo; outros JIDs não", () => {
+    expect(lidFromJid("123456789012345@lid")).toBe("lid:123456789012345");
+    expect(lidFromJid("123456789012345:3@lid")).toBe("lid:123456789012345");
+    expect(lidFromJid("5511988887777@s.whatsapp.net")).toBeNull();
+    expect(lidFromJid("x@lid")).toBeNull();
+    expect(lidFromJid(undefined)).toBeNull();
   });
 });
 

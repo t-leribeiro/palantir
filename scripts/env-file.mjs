@@ -2,7 +2,13 @@
 // anterior são preservadas, e a chave da sessão só é gerada quando falta. Trocar a chave obriga a parear de novo.
 import { randomBytes } from "node:crypto";
 
-export const PRESERVED = ["PALANTIR_WHATSAPP_ENABLED", "PALANTIR_WA_SESSION_KEY", "PALANTIR_WA_SESSION_DIR", "PALANTIR_WHATSAPP_HEALTH_PORT"];
+export const PRESERVED = [
+  "PALANTIR_WHATSAPP_ENABLED",
+  "PALANTIR_WHATSAPP_CAPTURE",
+  "PALANTIR_WA_SESSION_KEY",
+  "PALANTIR_WA_SESSION_DIR",
+  "PALANTIR_WHATSAPP_HEALTH_PORT",
+];
 
 export function parseEnv(text) {
   const out = {};
