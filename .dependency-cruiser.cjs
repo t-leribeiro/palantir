@@ -68,6 +68,13 @@ module.exports = {
       from: { path: "^src/platform/" },
       to: { path: "^src/modules/" },
     },
+    {
+      name: "whatsapp-lib-isolated",
+      comment: "A biblioteca não oficial do WhatsApp só entra por baileys-provider.ts (ADR-0009, D-20 da feature 003).",
+      severity: "error",
+      from: { path: "^src/", pathNot: "^src/channels/whatsapp/provider/baileys-provider\\.ts$" },
+      to: { path: "(^|node_modules/)baileys(/|$)" },
+    },
   ],
   options: {
     doNotFollow: { path: "node_modules" },

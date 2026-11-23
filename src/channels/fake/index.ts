@@ -10,4 +10,4 @@ export {
   type OutboxItem,
 } from "./fake-channel.js";
 export { fakeChannelRoutes } from "./http-routes.js";
-export { splitForChannel } from "./render.js";
+export { splitForChannel } from "../shared/split.js";

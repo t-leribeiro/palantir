@@ -60,9 +60,10 @@ describe("validateCanonicalMessage", () => {
     expect(malformed.ok).toBe(false);
   });
 
-  it("aceita mensagens 1.0.0 e 1.1.0 (mudança aditiva)", () => {
+  it("aceita mensagens 1.0.0, 1.1.0 e 1.2.0 (mudanças aditivas)", () => {
     expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.0.0" })).ok).toBe(true);
     expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.1.0" })).ok).toBe(true);
+    expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.2.0" })).ok).toBe(true);
   });
 
   it("rejeita campos extras", () => {
@@ -99,5 +100,13 @@ describe("validateAgentReply", () => {
   it("aceita 'no_evidence' sem citações", () => {
     const reply = { text: "Não encontrei evidências suficientes.", outcome: "no_evidence", citations: [] };
     expect(validateAgentReply(reply).ok).toBe(true);
+  });
+
+  it("aceita 'help' sem citações (contrato 1.2.0)", () => {
+    expect(validateAgentReply({ text: "Posso responder perguntas.", outcome: "help", citations: [] }).ok).toBe(true);
+  });
+
+  it("rejeita outcome desconhecido", () => {
+    expect(validateAgentReply({ text: "oi", outcome: "greeting", citations: [] }).ok).toBe(false);
   });
 });

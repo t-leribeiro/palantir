@@ -50,7 +50,7 @@ export interface CanonicalMessage {
  */
 export interface AgentReply {
   text: string;
-  outcome: "answered" | "no_evidence" | "error";
+  outcome: "answered" | "no_evidence" | "error" | "help";
   /**
    * @maxItems 20
    */

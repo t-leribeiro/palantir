@@ -12,3 +12,4 @@ Formato: MADR simplificado. Um arquivo por decisão, numerado em sequência. Dec
 | [0006](0006-iac-local-com-terraform-e-docker.md) | Ambiente local com Terraform e provider Docker | aceito |
 | [0007](0007-resposta-deterministica-no-esqueleto.md) | Resposta determinística atrás de `AnswerGenerator` | aceito |
 | [0008](0008-node-22-via-nvm.md) | TypeScript sobre Node.js 22 via nvm | aceito |
+| [0009](0009-adaptador-whatsapp-nao-oficial.md) | Adaptador WhatsApp não oficial, isolado, para o número do agente (rc, GPL-3.0 transitiva, sessão em arquivo) | aceito |

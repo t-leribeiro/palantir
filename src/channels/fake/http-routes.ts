@@ -29,7 +29,8 @@ export function fakeChannelRoutes(channel: FakeChannel): FastifyPluginAsync {
       { schema: { body: componentSchema("FakeAgentRequest") } },
       async (request, reply) => {
         try {
-          return reply.status(200).send(await channel.receiveAgentMessage(request.body));
+          const answer = await channel.receiveAgentMessage(request.body);
+          return answer ? reply.status(200).send(answer) : reply.status(204).send();
         } catch (error) {
           app.log.error({ err: { name: (error as Error).name } }, "falha ao responder pergunta ao agente");
           return reply.status(503).send({ error: "agent.unavailable" });

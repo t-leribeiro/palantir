@@ -13,7 +13,7 @@ import type {
 import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
 import { newId, systemClock, type Clock, type IdGenerator } from "../../shared/index.js";
-import { splitForChannel } from "./render.js";
+import { splitForChannel } from "../shared/split.js";
 
 export const FAKE_ADAPTER = "fake";
 export const FAKE_PROVIDER = "fake";
@@ -54,7 +54,7 @@ export interface FakeChannelOptions {
 
 export interface FakeChannel extends KnowledgeChannel {
   receiveInbound(input: FakeInbound): Promise<IngestOutcome>;
-  receiveAgentMessage(input: FakeAgentMessage): Promise<AgentReply>;
+  receiveAgentMessage(input: FakeAgentMessage): Promise<AgentReply | null>;
   outbox(limit?: number): readonly OutboxItem[];
   clearOutbox(): void;
 }
@@ -163,7 +163,7 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
       const valid = validateCanonicalMessage(message);
       if (!valid.ok) throw new Error(`Mensagem ao agente inválida: ${valid.error.details.map((d) => d.path).join(", ")}`);
       const reply = await handler(valid.value);
-      await channel.sendReply(input.senderAccountId, reply);
+      if (reply) await channel.sendReply(input.senderAccountId, reply);
       return reply;
     },
     outbox: (limit = 20) => sent.slice(0, limit),

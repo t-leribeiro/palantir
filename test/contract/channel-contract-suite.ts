@@ -18,6 +18,8 @@ export interface ChannelDriver {
   simulateDisconnect(): Promise<void>;
   /** Respostas renderizadas que o provedor recebeu do adaptador. */
   deliveredReplies(): readonly { destinationAccountId: string; parts: readonly string[] }[];
+  /** Destino válido para `sendReply` neste canal (padrão "destino-1"). */
+  readonly replyDestination?: string;
 }
 
 export interface ChannelHarness {
@@ -59,15 +61,17 @@ export function runChannelContractSuite(name: string, create: () => ChannelHarne
       await channel.disconnect();
     });
 
-    it("lista conversas conhecidas", async () => {
+    it("lista conversas conhecidas (canais que capturam)", async (ctx) => {
       const { channel } = await connected();
+      if (!channel.capabilities().supportsLiveCapture) ctx.skip();
       const conversations = await channel.listConversations();
       expect(conversations.length).toBeGreaterThan(0);
       for (const c of conversations) expect(["group", "direct"]).toContain(c.kind);
     });
 
-    it("entrega mensagens capturadas em onMessage como CanonicalMessage válida", async () => {
+    it("entrega mensagens capturadas em onMessage como CanonicalMessage válida", async (ctx) => {
       const { channel, driver, inbound } = await connected();
+      if (!channel.capabilities().supportsLiveCapture) ctx.skip();
       await driver.simulateInbound("mensagem do grupo");
       expect(inbound).toHaveLength(1);
       const [msg] = inbound;
@@ -86,22 +90,35 @@ export function runChannelContractSuite(name: string, create: () => ChannelHarne
 
     it("entrega respostas renderizadas dentro do limite do canal", async () => {
       const { channel, driver } = await connected();
+      const destination = driver.replyDestination ?? "destino-1";
       const long: AgentReply = { text: "a".repeat(channel.capabilities().maxMessageLength * 2 + 10), outcome: "no_evidence", citations: [] };
-      await channel.sendReply("destino-1", long);
+      await channel.sendReply(destination, long);
       const [delivered] = driver.deliveredReplies();
-      expect(delivered?.destinationAccountId).toBe("destino-1");
+      expect(delivered?.destinationAccountId).toBe(destination);
       expect(delivered?.parts.length).toBeGreaterThan(1);
       for (const part of delivered?.parts ?? []) {
         expect(part.length).toBeLessThanOrEqual(channel.capabilities().maxMessageLength);
       }
     });
 
+    it("entrega a resposta de ajuda (contrato 1.2.0)", async () => {
+      const { channel, driver } = await connected();
+      const destination = driver.replyDestination ?? "destino-1";
+      await channel.sendReply(destination, { text: "Posso responder perguntas sobre suas conversas.", outcome: "help", citations: [] });
+      expect(driver.deliveredReplies()[0]?.parts).toEqual(["Posso responder perguntas sobre suas conversas."]);
+    });
+
     it("volta a entregar mensagens depois de reconectar", async () => {
-      const { channel, driver, inbound } = await connected();
+      const { channel, driver, inbound, toAgent } = await connected();
       await driver.simulateDisconnect();
       await channel.connect();
-      await driver.simulateInbound("depois da reconexão");
-      expect(inbound).toHaveLength(1);
+      if (channel.capabilities().supportsLiveCapture) {
+        await driver.simulateInbound("depois da reconexão");
+        expect(inbound).toHaveLength(1);
+      } else {
+        await driver.simulateAgentMessage("depois da reconexão");
+        expect(toAgent).toHaveLength(1);
+      }
     });
   });
 }

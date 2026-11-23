@@ -127,6 +127,10 @@ resource "docker_container" "prometheus" {
     file    = "/etc/prometheus/prometheus.yml"
     content = file("${var.config_dir}/prometheus/prometheus.yml")
   }
+  upload {
+    file    = "/etc/prometheus/rules.yml"
+    content = file("${var.config_dir}/prometheus/rules.yml")
+  }
   ports {
     internal = 9090
     external = 9090

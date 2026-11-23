@@ -8,7 +8,10 @@ import Fastify, {
 import type { Logger } from "../logging/logger.js";
 import { componentSchema } from "./openapi.js";
 
-export type HealthChecks = () => Promise<Record<string, "ok" | "fail">>;
+/** Estado de cada dependência; os estados de sessão vêm do canal WhatsApp (feature 003). */
+export type HealthStatus = "ok" | "fail" | "pairing" | "connected" | "reconnecting" | "logged_out";
+export type HealthChecks = () => Promise<Record<string, HealthStatus>>;
+const HEALTHY: readonly HealthStatus[] = ["ok", "connected"];
 
 export interface HttpServerOptions {
   readonly health: HealthChecks;
@@ -47,7 +50,7 @@ export async function buildHttpServer(options: HttpServerOptions): Promise<Fasti
     { schema: { response: { 200: componentSchema("Health"), 503: componentSchema("Health") } } },
     async (_request, reply) => {
       const checks = await options.health();
-      const healthy = Object.values(checks).every((c) => c === "ok");
+      const healthy = Object.values(checks).every((c) => HEALTHY.includes(c));
       return reply.status(healthy ? 200 : 503).send({ status: healthy ? "ok" : "degraded", checks });
     },
   );

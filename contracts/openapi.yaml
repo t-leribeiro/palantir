@@ -67,6 +67,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "./channel/agent-reply.schema.json" }
+        "204":
+          description: Sem resposta (remetente desconhecido num canal com política de silêncio).
         "400":
           description: Corpo inválido.
           content:
@@ -106,7 +108,7 @@ components:
         status: { type: string, enum: [ok, degraded] }
         checks:
           type: object
-          additionalProperties: { type: string, enum: [ok, fail] }
+          additionalProperties: { type: string, enum: [ok, fail, pairing, connected, reconnecting, logged_out] }
     FakeInboundRequest:
       type: object
       additionalProperties: false

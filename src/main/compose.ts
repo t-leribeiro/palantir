@@ -1,8 +1,11 @@
 // Raiz de composição (ADR-0001): o único lugar que liga portas às implementações.
 import type { FastifyInstance } from "fastify";
 import { createFakeChannel, fakeChannelRoutes } from "../channels/fake/index.js";
+import { createOtelWhatsAppObserver } from "../channels/whatsapp/observability.js";
+import type { WhatsAppProvider } from "../channels/whatsapp/provider/provider.js";
+import { createWhatsAppChannel, type WhatsAppChannel, type WhatsAppObserver } from "../channels/whatsapp/whatsapp-channel.js";
 import type { IngestOutcome } from "../contracts/channel/knowledge-channel.js";
-import { createAskQuestion, createDeterministicAnswerGenerator } from "../modules/agent/index.js";
+import { createAskQuestion, createDeterministicAnswerGenerator, createPgInboundReceipts, type UnknownSenderPolicy } from "../modules/agent/index.js";
 import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../modules/identity/index.js";
 import { INDEX_QUEUE, createIngestMessage, createPgUnitOfWork } from "../modules/ingestion/index.js";
 import { createIndexMessage, createPgChunkRepository, type IndexRequest } from "../modules/knowledge/index.js";
@@ -49,15 +52,21 @@ export interface ApiHandle {
   close(): Promise<void>;
 }
 
-export async function buildApi(config: AppConfig, options: CompositionOptions = {}): Promise<ApiHandle> {
-  const { pool, queue, logger, metrics } = await infra(config, options);
-  const ingest = buildIngest(pool, queue);
+/** Agente com identidade, busca e resposta determinística (ADR-0007); a política vem do canal. */
+function buildAsk(config: AppConfig, pool: Pool, unknownSender: UnknownSenderPolicy) {
   const search = createSearchEvidence({ index: createPgSearchIndex(pool), lowConfidenceThreshold: config.lowConfidenceThreshold });
-  const ask = createAskQuestion({
+  return createAskQuestion({
     identity: { resolve: createResolveUserByChannelAccount(createPgIdentityRepository(pool)) },
     search: { search: (request) => withSpan("retrieval.search", () => search(request)) },
     generator: createDeterministicAnswerGenerator(),
+    unknownSender,
   });
+}
+
+export async function buildApi(config: AppConfig, options: CompositionOptions = {}): Promise<ApiHandle> {
+  const { pool, queue, logger, metrics } = await infra(config, options);
+  const ingest = buildIngest(pool, queue);
+  const ask = buildAsk(config, pool, "reply");
 
   const channel = createFakeChannel({ onInvalid: () => metrics.channelInvalid("fake") });
   channel.onMessage((message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))));
@@ -65,8 +74,8 @@ export async function buildApi(config: AppConfig, options: CompositionOptions = 
     withSpan("agent.ask", async () => {
       const started = performance.now();
       const reply = await ask(message);
-      metrics.ask(reply.outcome, seconds(started));
-      logger.info({ outcome: reply.outcome, citations: reply.citations.length }, "pergunta respondida");
+      metrics.ask(reply?.outcome ?? "silent", seconds(started));
+      logger.info({ outcome: reply?.outcome ?? "silent", citations: reply?.citations.length ?? 0 }, "pergunta respondida");
       return reply;
     }),
   );
@@ -132,6 +141,56 @@ export async function startWorker(config: AppConfig, options: CompositionOptions
   return {
     async close() {
       await queue.stop();
+      await pool.end();
+    },
+  };
+}
+
+export interface WhatsAppHandle {
+  readonly channel: WhatsAppChannel;
+  readonly server: FastifyInstance;
+  close(): Promise<void>;
+}
+
+export interface WhatsAppCompositionOptions extends CompositionOptions {
+  readonly provider: WhatsAppProvider;
+  readonly observer?: WhatsAppObserver;
+}
+
+const RECEIPT_RETENTION_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * Processo do número do agente (feature 003, D-04): só conversa, não ingere. Remetente desconhecido não
+ * recebe nada (política "silent", RF-05); health com o estado da sessão (RF-11).
+ */
+export async function buildWhatsApp(config: AppConfig, options: WhatsAppCompositionOptions): Promise<WhatsAppHandle> {
+  const pool = createPool(config.databaseUrl);
+  const logger = options.logger ?? createLogger({ level: config.logLevel, exportToOtel: Boolean(config.otlpEndpoint) });
+  const metrics = options.metrics ?? createOtelMetrics();
+  const receipts = createPgInboundReceipts(pool);
+  const purged = await receipts.purgeOlderThan(new Date(Date.now() - RECEIPT_RETENTION_MS));
+  const ask = buildAsk(config, pool, "silent");
+  const log = { info: (m: string) => logger.info(m), warn: (m: string) => logger.warn(m), error: (m: string) => logger.error(m) };
+  const observer = options.observer ?? createOtelWhatsAppObserver(undefined, log);
+  const channel = createWhatsAppChannel({ provider: options.provider, receipts, observer });
+  channel.onAgentMessage((message) =>
+    withSpan("agent.ask", async () => {
+      const started = performance.now();
+      const reply = await ask(message);
+      metrics.ask(reply?.outcome ?? "silent", seconds(started));
+      logger.info({ outcome: reply?.outcome ?? "silent", citations: reply?.citations.length ?? 0 }, "mensagem ao agente pelo WhatsApp tratada");
+      return reply;
+    }),
+  );
+  const server = await buildHttpServer({ logger, health: async () => ({ db: await checkDatabase(pool), whatsapp: channel.state() }) });
+  await channel.connect();
+  logger.info({ purgedReceipts: purged }, "canal WhatsApp iniciado");
+  return {
+    channel,
+    server,
+    async close() {
+      await channel.disconnect();
+      await server.close();
       await pool.end();
     },
   };
