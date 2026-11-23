@@ -17,7 +17,7 @@ Fora do escopo da v0.1: memória coletiva entre usuários, knowledge graph sofis
 
 ## Estado atual
 
-S0 (feature `001`) e S1 (feature `002`, importação de conversas exportadas) entregues; S2 (feature `003`, perguntar pelo WhatsApp ao número do agente) implementada, com demonstração manual pelo chip pendente; adendos em `_reversa_sdd/addenda/`. Ainda sem captura de grupos ao vivo, transcrição nem busca semântica. **Plano e status das entregas: `docs/plano-de-fatias.md`** (atualize o status a cada fatia). Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
+S0 (feature `001`) e S1 (feature `002`, importação de conversas exportadas) entregues; S2 (feature `003`, perguntar pelo WhatsApp ao número do agente) implementada e demonstrada com o chip real; adendos em `_reversa_sdd/addenda/`. Ainda sem captura de grupos ao vivo, transcrição nem busca semântica. **Plano e status das entregas: `docs/plano-de-fatias.md`** (atualize o status a cada fatia). Stack: TypeScript sobre Node 22, Fastify, PostgreSQL 16 (pgvector) e fila pg-boss no próprio banco. Decisões em `docs/adr/`.
 
 Use `nvm use 22` antes de trabalhar: o `engine-strict` recusa outras versões e os hooks de commit falham sem ela. `npm run doctor` confere Node, Docker, Terraform, gitleaks e OSV-Scanner.
 
