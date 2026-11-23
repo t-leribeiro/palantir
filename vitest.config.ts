@@ -34,6 +34,8 @@ export default defineConfig({
           name: "e2e",
           include: ["test/e2e/**/*.test.ts"],
           testTimeout: 60_000,
+          // beforeAll sobe PostgreSQL em container e roda migrações: num runner frio passa de 10 s.
+          hookTimeout: 180_000,
           fileParallelism: false,
         },
       },
