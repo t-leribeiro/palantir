@@ -8,11 +8,12 @@ export function createPgMessageStore(db: Queryable): MessageStore {
     async insert(message: NewMessage): Promise<InsertResult> {
       const participantId = await upsertParticipant(db, message);
       const quotedId = await resolveQuoted(db, message);
+      const target = conflictTarget(message);
       const inserted = await db.query<{ id: string }>(
-        `INSERT INTO messages (id, space_id, source_id, participant_id, external_message_id, kind, text,
+        `INSERT INTO messages (id, space_id, source_id, participant_id, external_message_id, import_key, kind, text,
                                quoted_message_id, is_forwarded, sent_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (source_id, external_message_id) WHERE external_message_id IS NOT NULL DO NOTHING
+         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10)
+         ${target.onConflict}
          RETURNING id`,
         [
           message.id,
@@ -25,6 +26,7 @@ export function createPgMessageStore(db: Queryable): MessageStore {
           quotedId,
           message.isForwarded,
           message.sentAt,
+          message.importKey ?? null,
         ],
       );
       const insertedId = inserted.rows[0]?.id;
@@ -33,14 +35,30 @@ export function createPgMessageStore(db: Queryable): MessageStore {
         return { status: "inserted", id: insertedId };
       }
       const existing = await db.query<{ id: string }>(
-        "SELECT id FROM messages WHERE source_id = $1 AND external_message_id = $2",
-        [message.sourceId, message.externalMessageId],
+        `SELECT id FROM messages WHERE source_id = $1 AND ${target.column} = $2`,
+        [message.sourceId, target.value],
       );
       const existingId = existing.rows[0]?.id;
       if (!existingId) throw new Error("Conflito de unicidade sem mensagem existente correspondente.");
       await addProvenance(db, existingId, message);
       return { status: "duplicate", id: existingId };
     },
+  };
+}
+
+/** Alvo do ON CONFLICT: índice parcial do id externo (ao vivo) ou da chave de importação (D-09 da S1). */
+function conflictTarget(message: NewMessage): { onConflict: string; column: string; value: string | null } {
+  if (message.importKey && !message.externalMessageId) {
+    return {
+      onConflict: "ON CONFLICT (source_id, import_key) WHERE import_key IS NOT NULL DO NOTHING",
+      column: "import_key",
+      value: message.importKey,
+    };
+  }
+  return {
+    onConflict: "ON CONFLICT (source_id, external_message_id) WHERE external_message_id IS NOT NULL DO NOTHING",
+    column: "external_message_id",
+    value: message.externalMessageId ?? null,
   };
 }
 

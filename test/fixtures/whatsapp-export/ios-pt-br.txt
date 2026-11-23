@@ -1,0 +1,6 @@
+[10/11/2026, 09:58:00] Comunidade DevOps: ‎As mensagens e ligações são protegidas com a criptografia de ponta a ponta.
+[10/11/2026, 10:00:15] Diego: Recomendo o Temporal para workflows longos
+[10/11/2026, 10:01:00] Ana: Primeira linha
+segunda linha
+[10/11/2026, 10:02:00] Carla: ‎<anexado: 00000012-AUDIO-2026-11-10-10-02-00.opus>
+‎[10/11/2026, 10:03:00] Comunidade DevOps: ‎Bia entrou usando o link de convite deste grupo

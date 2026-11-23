@@ -44,10 +44,25 @@ describe("validateCanonicalMessage", () => {
     const source = without(canonicalMessage().source, "externalMessageId");
     expect(validateCanonicalMessage(canonicalMessage({ source })).ok).toBe(false);
     const imported = canonicalMessage({
-      source,
+      source: { ...source, importKey: "a".repeat(64) },
       provenance: { ...canonicalMessage().provenance, captureMethod: "export_import" },
     });
     expect(validateCanonicalMessage(imported).ok).toBe(true);
+  });
+
+  it("contrato 1.1: exige importKey (SHA-256 hex) em mensagem importada", () => {
+    const source = without(canonicalMessage().source, "externalMessageId");
+    const provenance = { ...canonicalMessage().provenance, captureMethod: "export_import" as const };
+    const missing = validateCanonicalMessage(canonicalMessage({ source, provenance }));
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error.details.map((d) => d.path)).toContain("/source/importKey");
+    const malformed = validateCanonicalMessage(canonicalMessage({ source: { ...source, importKey: "xyz" }, provenance }));
+    expect(malformed.ok).toBe(false);
+  });
+
+  it("aceita mensagens 1.0.0 e 1.1.0 (mudança aditiva)", () => {
+    expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.0.0" })).ok).toBe(true);
+    expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.1.0" })).ok).toBe(true);
   });
 
   it("rejeita campos extras", () => {

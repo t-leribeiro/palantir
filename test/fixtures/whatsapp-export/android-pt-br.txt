@@ -1,0 +1,12 @@
+10/11/2026 09:58 - As mensagens e ligações são protegidas com a criptografia de ponta a ponta e ficam somente entre você e os participantes desta conversa. Nem mesmo o WhatsApp pode ler ou ouvi-las.
+10/11/2026 09:59 - Bia entrou usando o link de convite deste grupo
+10/11/2026 10:00 - Diego: Recomendo o Temporal para orquestrar workflows de longa duração
+10/11/2026 10:01 - Ana: Concordo. Usamos em produção:
+- retries automáticos
+- histórico de execução
+10/11/2026 10:02 - Ana: ok
+10/11/2026 10:02 - Ana: ok
+10/11/2026 10:03 - Carla: <Mídia oculta>
+10/11/2026 10:04 - Bruno: PTT-20261110-WA0001.opus (arquivo anexado)
+10/11/2026 10:05 - Bruno: Esta mensagem foi apagada
+11/11/2026 08:30 - +55 11 98888-7777: Alguém testou o Karpenter no EKS?

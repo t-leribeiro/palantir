@@ -7,7 +7,7 @@
 export type ZonedDateTime = string;
 
 /**
- * Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004).
+ * Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004; 1.1.0 adiciona source.importKey).
  */
 export interface CanonicalMessage {
   contractVersion: string;
@@ -17,6 +17,10 @@ export interface CanonicalMessage {
     accountId: string;
     conversationId: string;
     externalMessageId?: string;
+    /**
+     * Chave determinística da mensagem importada (SHA-256 em hex); obrigatória em export_import.
+     */
+    importKey?: string;
   };
   sender: {
     externalId: string;

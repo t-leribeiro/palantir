@@ -9,6 +9,8 @@ export interface NewMessage {
   readonly spaceId: string;
   readonly sourceId: string;
   readonly externalMessageId: string | undefined;
+  /** Chave determinística de mensagens importadas (contrato 1.1.0); deduplica reimportações (RN-02 da S1). */
+  readonly importKey: string | undefined;
   readonly sender: { readonly externalId: string; readonly displayName: string | undefined };
   readonly kind: MessageKind;
   readonly text: string | undefined;
@@ -29,6 +31,7 @@ export function toNewMessage(message: CanonicalMessage, target: IngestTarget, id
     spaceId: target.spaceId,
     sourceId: target.sourceId,
     externalMessageId: message.source.externalMessageId,
+    importKey: message.source.importKey,
     sender: { externalId: message.sender.externalId, displayName: message.sender.displayName },
     kind: message.kind,
     text: message.text,
