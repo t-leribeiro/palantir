@@ -31,6 +31,6 @@ for (const [name, args] of items) {
 }
 
 const failed = results.filter((r) => !r.ok).length;
-console.log("\nCode review: verificado pela proteção da branch main (1 aprovação obrigatória).");
+console.log("\nCode review: aplicado pela proteção da branch main (aprovações definidas em scripts/branch-protection.sh).");
 console.log(failed === 0 ? "DoR: todos os itens automáticos aprovados." : `DoR: ${failed} item(ns) reprovado(s).`);
 process.exit(failed === 0 ? 0 : 1);
