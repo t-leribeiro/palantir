@@ -1,0 +1,101 @@
+diff --git a/test/unit/whatsapp-export/parse.test.ts b/test/unit/whatsapp-export/parse.test.ts
+index 203bf76..ae35392 100644
+--- a/test/unit/whatsapp-export/parse.test.ts
++++ b/test/unit/whatsapp-export/parse.test.ts
+@@ -143,3 +143,44 @@ describe("ordem de data e formatos inválidos", () => {
+     expect(summary(result)).toEqual(["10/11/2026 10:0 Ana: oi", "10/11/2026 10:1 Bia: olá"]);
+   });
+ });
++
++describe("legenda de anexo (BUG-6 de _reversa_bugs/importacao-whatsapp, BUG-20261123-S57G)", () => {
++  it("anexo com legenda vira mensagem com a legenda, o autor e a data do anexo; continua contado como mídia", () => {
++    const result = parseExport([
++      "13/11/2026 10:00 - Ana: recibo.pdf (arquivo anexado)",
++      "Recibo da psicóloga, novembro",
++      "13/11/2026 10:01 - Bia: IMG-20261113-WA0001.jpg (arquivo anexado)",
++      "13/11/2026 10:02 - Ana: comprovante.pdf (arquivo anexado)",
++      "Luz de outubro",
++      "pago no débito",
++      "13/11/2026 10:03 - Bia: ok",
++    ]);
++    expect(summary(result)).toEqual([
++      "13/11/2026 10:0 Ana: Recibo da psicóloga, novembro",
++      "13/11/2026 10:2 Ana: Luz de outubro\npago no débito",
++      "13/11/2026 10:3 Bia: ok",
++    ]);
++    expect(result.mediaCount).toBe(3);
++    expect(result.systemCount).toBe(0);
++  });
++
++  it("vale para o export em inglês, para o iOS e para a mídia oculta", () => {
++    const en = parseExport(["11/13/26, 10:00 AM - Ana: receipt.pdf (file attached)", "Therapist receipt"]);
++    expect(en.messages.map((m) => m.text)).toEqual(["Therapist receipt"]);
++    const ios = parseExport(["[13/11/2026, 10:00:00] Ana: ‎<anexado: 00000012-PHOTO-2026-11-13.jpg>", "Recibo da psicóloga"]);
++    expect(ios.messages.map((m) => m.text)).toEqual(["Recibo da psicóloga"]);
++    const hidden = parseExport(["13/11/2026 10:00 - Ana: <Mídia oculta>", "Recibo da psicóloga"]);
++    expect(hidden.messages.map((m) => m.text)).toEqual(["Recibo da psicóloga"]);
++  });
++
++  it("legenda só com espaços não vira mensagem; marcador de edição sai da legenda", () => {
++    const result = parseExport([
++      "13/11/2026 10:00 - Ana: recibo.pdf (arquivo anexado)",
++      "   ",
++      "13/11/2026 10:01 - Ana: foto.jpg (arquivo anexado)",
++      "Conta de água <Mensagem editada>",
++    ]);
++    expect(result.messages.map((m) => m.text)).toEqual(["Conta de água"]);
++    expect(result.mediaCount).toBe(2);
++  });
++});
+diff --git a/test/unit/whatsapp-export/real-exports.test.ts b/test/unit/whatsapp-export/real-exports.test.ts
+index 8d3d8d7..f7d2577 100644
+--- a/test/unit/whatsapp-export/real-exports.test.ts
++++ b/test/unit/whatsapp-export/real-exports.test.ts
+@@ -4,12 +4,29 @@
+ import { existsSync, readdirSync } from "node:fs";
+ import { fileURLToPath } from "node:url";
+ import { describe, expect, it } from "vitest";
+-import { importWhatsAppExport, type ImportDeps } from "../../../src/channels/whatsapp-export/index.js";
++import { importWhatsAppExport, readExportLines, type ImportDeps } from "../../../src/channels/whatsapp-export/index.js";
+ import type { CanonicalMessage } from "../../../src/contracts/channel/knowledge-channel.js";
+ 
+ const dir = fileURLToPath(new URL("../../../exports/", import.meta.url));
+ const files = existsSync(dir) ? readdirSync(dir).filter((f) => /\.(zip|txt)$/i.test(f)) : [];
+ 
++const HEADER = /^[\u200e\u200f\ufeff]*\[?\d{1,2}\/\d{1,2}\/\d{2,4}/;
++const MEDIA_HEADER = /(\((arquivo anexado|file attached)\)|<(m[íi]dia oculta|media omitted|anexado:[^>]*|attached:[^>]*)>)\s*$/i;
++
++/** Legendas de anexo no arquivo bruto (linha logo após o cabeçalho do anexo) que não viraram mensagem (BUG-6). */
++async function lostCaptions(file: string, stored: readonly CanonicalMessage[]): Promise<number> {
++  const lines: string[] = [];
++  for await (const line of readExportLines(`${dir}${file}`)) lines.push(line.replace(/\r$/, ""));
++  const texts = stored.map((m) => m.text ?? "");
++  let lost = 0;
++  for (const [i, line] of lines.entries()) {
++    const next = lines[i + 1]?.replace(/[\u200e\u200f]/g, "").trim();
++    if (!MEDIA_HEADER.test(line) || !next || HEADER.test(next)) continue;
++    if (!texts.some((t) => t.startsWith(next.replace(/\s*<(mensagem editada|this message was edited)>$/i, "")))) lost += 1;
++  }
++  return lost;
++}
++
+ const APP_MARKERS = /(<Mensagem editada>|<This message was edited>)$|^(Mensagem apagada|Esta mensagem foi apagada|This message was deleted)$/;
+ 
+ async function importInMemory(file: string) {
+@@ -34,13 +51,15 @@ describe.skipIf(files.length === 0)("exportações reais locais (exports/)", ()
+     const markers = stored.filter((m) => APP_MARKERS.test(m.text ?? "")).length;
+     const emptyTexts = stored.filter((m) => (m.text ?? "").trim() === "").length;
+     const tildeAuthors = stored.filter((m) => m.sender.displayName?.startsWith("~")).length;
+-    expect({ rejected: report.rejected, unrecognized: report.unrecognizedLines, outOfOrder, markers, emptyTexts, tildeAuthors }).toEqual({
++    const captionsLost = await lostCaptions(file, stored);
++    expect({ rejected: report.rejected, unrecognized: report.unrecognizedLines, outOfOrder, markers, emptyTexts, tildeAuthors, captionsLost }).toEqual({
+       rejected: 0,
+       unrecognized: 0,
+       outOfOrder: 0,
+       markers: 0,
+       emptyTexts: 0,
+       tildeAuthors: 0,
++      captionsLost: 0,
+     });
+     expect(report.imported).toBeGreaterThan(0);
+   });

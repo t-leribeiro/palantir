@@ -1,0 +1,33 @@
+diff --git a/src/channels/whatsapp-export/parse.ts b/src/channels/whatsapp-export/parse.ts
+index 07a2cde..82e62f0 100644
+--- a/src/channels/whatsapp-export/parse.ts
++++ b/src/channels/whatsapp-export/parse.ts
+@@ -89,11 +89,12 @@ export function parseExport(lines: Iterable<string>, options: { dateOrder?: Date
+   }
+   assertRecognized(entries.length, unrecognized, nonEmpty, firstUnrecognized);
+   const dateOrder = options.dateOrder ?? detectDateOrder(entries);
+-  const texts = entries.filter((e) => e.kind === "text").map((e) => toMessage(e, dateOrder));
++  // Anexo com legenda também é texto do autor (BUG-20261123-S57G): a legenda vira mensagem; o anexo segue contado.
++  const texts = entries.filter((e) => e.kind === "text" || (e.kind === "media" && e.text.trim() !== "")).map((e) => toMessage(e, dateOrder));
+   const messages = texts.filter((m) => m.text !== "");
+   return {
+     messages,
+-    // Mensagem sem texto (ex.: mídia sem legenda) não é conhecimento: conta como ignorada, junto das de sistema.
++    // Mensagem sem texto (ex.: `Autor: ` vazio) não é conhecimento: conta como ignorada, junto das de sistema.
+     systemCount: entries.filter((e) => e.kind === "system").length + texts.length - messages.length,
+     mediaCount: entries.filter((e) => e.kind === "media").length,
+     unrecognizedLines: unrecognized,
+@@ -141,9 +142,12 @@ function classify(rest: string, ios: boolean): { kind: Kind; author: string; tex
+   return { kind: "text", author, text };
+ }
+ 
++/** Linha sem cabeçalho continua a mensagem anterior: texto em várias linhas ou legenda de um anexo. */
+ function appendContinuation(entries: RawEntry[], line: string): void {
+   const last = entries[entries.length - 1];
+-  if (last?.kind === "text") last.text = `${last.text}\n${line.replace(MARKS, "")}`;
++  const clean = line.replace(MARKS, "");
++  if (last?.kind === "text") last.text = `${last.text}\n${clean}`;
++  else if (last?.kind === "media") last.text = last.text.trim() === "" ? clean.trim() : `${last.text}\n${clean}`;
+ }
+ 
+ function assertRecognized(entries: number, unrecognized: number, nonEmpty: number, sample: string | undefined): void {

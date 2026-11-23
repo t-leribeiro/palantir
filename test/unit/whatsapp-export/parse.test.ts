@@ -143,3 +143,44 @@ describe("ordem de data e formatos inválidos", () => {
     expect(summary(result)).toEqual(["10/11/2026 10:0 Ana: oi", "10/11/2026 10:1 Bia: olá"]);
   });
 });
+
+describe("legenda de anexo (BUG-6 de _reversa_bugs/importacao-whatsapp, BUG-20261123-S57G)", () => {
+  it("anexo com legenda vira mensagem com a legenda, o autor e a data do anexo; continua contado como mídia", () => {
+    const result = parseExport([
+      "13/11/2026 10:00 - Ana: recibo.pdf (arquivo anexado)",
+      "Recibo da psicóloga, novembro",
+      "13/11/2026 10:01 - Bia: IMG-20261113-WA0001.jpg (arquivo anexado)",
+      "13/11/2026 10:02 - Ana: comprovante.pdf (arquivo anexado)",
+      "Luz de outubro",
+      "pago no débito",
+      "13/11/2026 10:03 - Bia: ok",
+    ]);
+    expect(summary(result)).toEqual([
+      "13/11/2026 10:0 Ana: Recibo da psicóloga, novembro",
+      "13/11/2026 10:2 Ana: Luz de outubro\npago no débito",
+      "13/11/2026 10:3 Bia: ok",
+    ]);
+    expect(result.mediaCount).toBe(3);
+    expect(result.systemCount).toBe(0);
+  });
+
+  it("vale para o export em inglês, para o iOS e para a mídia oculta", () => {
+    const en = parseExport(["11/13/26, 10:00 AM - Ana: receipt.pdf (file attached)", "Therapist receipt"]);
+    expect(en.messages.map((m) => m.text)).toEqual(["Therapist receipt"]);
+    const ios = parseExport(["[13/11/2026, 10:00:00] Ana: ‎<anexado: 00000012-PHOTO-2026-11-13.jpg>", "Recibo da psicóloga"]);
+    expect(ios.messages.map((m) => m.text)).toEqual(["Recibo da psicóloga"]);
+    const hidden = parseExport(["13/11/2026 10:00 - Ana: <Mídia oculta>", "Recibo da psicóloga"]);
+    expect(hidden.messages.map((m) => m.text)).toEqual(["Recibo da psicóloga"]);
+  });
+
+  it("legenda só com espaços não vira mensagem; marcador de edição sai da legenda", () => {
+    const result = parseExport([
+      "13/11/2026 10:00 - Ana: recibo.pdf (arquivo anexado)",
+      "   ",
+      "13/11/2026 10:01 - Ana: foto.jpg (arquivo anexado)",
+      "Conta de água <Mensagem editada>",
+    ]);
+    expect(result.messages.map((m) => m.text)).toEqual(["Conta de água"]);
+    expect(result.mediaCount).toBe(2);
+  });
+});
