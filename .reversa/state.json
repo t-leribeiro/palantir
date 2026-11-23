@@ -283,5 +283,18 @@
     ".reversa\\plan.md",
     ".reversa\\version",
     ".reversa\\_config\\manifest.yaml"
-  ]
+  ],
+  "newproject_progress": {
+    "mode": "guiado",
+    "stage": "done",
+    "started_at": "2026-11-22T11:31:38-03:00",
+    "last_checkpoint_at": "2026-11-22T20:50:19-03:00",
+    "completed_stages": [
+      "ideator",
+      "researcher",
+      "drafter",
+      "spec-sdd"
+    ],
+    "brief": "Dar vida ao Palantír — Personal Knowledge Agent (ChatGPT-Ideacao.md): memória pessoal inteligente sobre conversas do WhatsApp, consultada pelo próprio WhatsApp."
+  }
 }

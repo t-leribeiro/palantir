@@ -1,0 +1,8 @@
+# Regras padrão do gitleaks, com uma exceção revisada.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Falsos positivos revisados"
+# Manifesto do framework Reversa: só contém hashes SHA-256 dos arquivos instalados, não segredos.
+paths = ['''^\.reversa/_config/files-manifest\.json$''']

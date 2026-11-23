@@ -1,0 +1,165 @@
+openapi: 3.1.0
+info:
+  title: Palantír API (walking skeleton)
+  version: 0.1.0
+  description: >
+    API HTTP do walking skeleton (feature 001). As rotas /v1/channels/fake/* só existem com
+    PALANTIR_FAKE_CHANNEL=true e nunca devem ser habilitadas fora do ambiente local e de teste.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Todos os componentes saudáveis.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Algum componente indisponível.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /v1/channels/fake/inbound:
+    post:
+      operationId: postFakeInbound
+      description: Injeta uma mensagem como se tivesse sido capturada em uma conversa. Idempotente por (conversationId, externalMessageId).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FakeInboundRequest" }
+      responses:
+        "202":
+          description: Mensagem gravada e indexação enfileirada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResponse" }
+        "200":
+          description: Mensagem já gravada anteriormente (duplicata).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResponse" }
+        "400":
+          description: Corpo inválido pelo contrato.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Fonte inexistente ou não autorizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/channels/fake/agent:
+    post:
+      operationId: postFakeAgent
+      description: Envia uma mensagem ao agente como o dono da conta de canal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FakeAgentRequest" }
+      responses:
+        "200":
+          description: Pergunta processada.
+          content:
+            application/json:
+              schema: { $ref: "./channel/agent-reply.schema.json" }
+        "400":
+          description: Corpo inválido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Agente indisponível.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/channels/fake/outbox:
+    get:
+      operationId: getFakeOutbox
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Respostas entregues pelo adaptador fake, mais recente primeiro.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Outbox" }
+    delete:
+      operationId: deleteFakeOutbox
+      responses:
+        "204":
+          description: Registro de respostas limpo.
+components:
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [ok, fail] }
+    FakeInboundRequest:
+      type: object
+      additionalProperties: false
+      required: [conversationId, externalMessageId, senderId, text, timestamp]
+      properties:
+        accountId: { type: string, minLength: 1, default: fake-operator }
+        conversationId: { type: string, minLength: 1 }
+        externalMessageId: { type: string, minLength: 1 }
+        senderId: { type: string, minLength: 1 }
+        senderName: { type: string }
+        text: { type: string, minLength: 1, maxLength: 50000 }
+        timestamp: { type: string, format: date-time }
+    IngestResponse:
+      type: object
+      additionalProperties: false
+      required: [outcome, messageId]
+      properties:
+        outcome: { type: string, enum: [accepted, duplicate] }
+        messageId: { type: string, format: uuid }
+    FakeAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [senderAccountId, text]
+      properties:
+        senderAccountId: { type: string, minLength: 1 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+    OutboxItem:
+      type: object
+      additionalProperties: false
+      required: [destinationAccountId, reply, rendered, sentAt]
+      properties:
+        destinationAccountId: { type: string }
+        reply: { $ref: "./channel/agent-reply.schema.json" }
+        rendered: { type: string }
+        sentAt: { type: string, format: date-time }
+    Outbox:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OutboxItem" }
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }

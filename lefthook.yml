@@ -1,0 +1,24 @@
+# Pre-commit (RF-05): lint com complexidade, tipos, arquitetura, unitários afetados e segredos.
+# Meta: ≤ 60 s. A esteira (.github/workflows/pr.yml) repete tudo, então --no-verify não fura o gate.
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.{ts,js,mjs,cjs}"
+      run: npx eslint --max-warnings=0 --no-warn-ignored {staged_files}
+    complexity-exceptions:
+      run: node scripts/complexity.mjs check
+    typecheck:
+      glob: "*.ts"
+      run: npx tsc --noEmit
+    architecture:
+      glob: "src/**/*.ts"
+      run: npx depcruise src --config .dependency-cruiser.cjs
+    contracts:
+      glob: "contracts/**"
+      run: node scripts/contracts.mjs check
+    unit:
+      glob: "{src,test}/**/*.ts"
+      run: npx vitest run --project unit --project architecture --changed HEAD --passWithNoTests
+    secrets:
+      run: node scripts/hooks/gitleaks-staged.mjs
