@@ -37,6 +37,8 @@ export interface PersistedAuthState {
   readonly state: AuthenticationState;
   readonly isNew: boolean;
   saveCreds(): void;
+  /** Para de gravar: depois do logout, escritas tardias da biblioteca não podem recriar a sessão morta. */
+  dispose(): void;
 }
 
 /** Credenciais e todas as chaves (inclusive `lid-mapping`) num snapshot salvo no arquivo criptografado. */
@@ -45,7 +47,10 @@ export async function createPersistedAuthState(store: EncryptedFileStore): Promi
   const snapshot = text ? (JSON.parse(text, BufferJSON.reviver) as { creds: AuthenticationCreds; keys: StoredKeys }) : null;
   const creds = snapshot?.creds ?? initAuthCreds();
   const keys: StoredKeys = snapshot?.keys ?? {};
-  const persist = () => store.save(JSON.stringify({ creds, keys }, BufferJSON.replacer));
+  let disposed = false;
+  const persist = () => {
+    if (!disposed) store.save(JSON.stringify({ creds, keys }, BufferJSON.replacer));
+  };
 
   const state: AuthenticationState = {
     creds,
@@ -72,7 +77,14 @@ export async function createPersistedAuthState(store: EncryptedFileStore): Promi
       },
     },
   };
-  return { state, isNew: snapshot === null, saveCreds: persist };
+  return {
+    state,
+    isNew: snapshot === null,
+    saveCreds: persist,
+    dispose: () => {
+      disposed = true;
+    },
+  };
 }
 
 /** Logger da biblioteca no nível `error`, descartando objetos (podem conter mensagens ou credenciais). */
@@ -119,6 +131,10 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
   const stateListeners: ((state: SessionState, reason?: string) => void)[] = [];
   let onDirect: ((message: IncomingDirect) => Promise<void>) | undefined;
   let socket: Socket | undefined;
+  // Estado de autenticação em memória, lido do arquivo só na primeira conexão. As reconexões reutilizam
+  // este objeto: o arquivo pode estar atrasado (gravação agrupada) logo depois do pareamento, e reabrir
+  // com credenciais antigas faz o WhatsApp encerrar a sessão recém-pareada (401).
+  let auth: PersistedAuthState | undefined;
   let attempt = 0;
   let stopping = false;
   let retryTimer: NodeJS.Timeout | undefined;
@@ -176,6 +192,10 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
     if (stopping) return;
     const code = statusCodeOf(error);
     if (code === DisconnectReason.loggedOut) {
+      auth?.dispose();
+      auth = undefined;
+      socket?.end(undefined);
+      socket = undefined;
       await store.remove();
       log.warn("o WhatsApp encerrou a sessão do número do agente: pareie de novo com npm run dev:whatsapp");
       emitState("logged_out", String(code));
@@ -188,17 +208,18 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
   }
 
   async function open(): Promise<void> {
-    const auth = await loadAuth();
+    auth ??= await loadAuth();
+    const current = auth;
     const logger = quietLogger(log);
     socket = makeWASocket({
-      auth: { creds: auth.state.creds, keys: makeCacheableSignalKeyStore(auth.state.keys, logger) },
+      auth: { creds: current.state.creds, keys: makeCacheableSignalKeyStore(current.state.keys, logger) },
       logger,
       markOnlineOnConnect: false,
       syncFullHistory: false,
       shouldIgnoreJid: isIgnoredJid,
       getMessage: async () => undefined,
     });
-    socket.ev.on("creds.update", auth.saveCreds);
+    socket.ev.on("creds.update", current.saveCreds);
     socket.ev.on("messages.upsert", (update) => void onUpsert(update));
     socket.ev.on("connection.update", (update) => {
       if (update.qr) {

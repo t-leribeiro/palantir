@@ -60,6 +60,7 @@ Tamanho: 17 ações, acima das ~15 da regra das fatias (`docs/plano-de-fatias.md
 
 ## Notas de execução
 
+- T013 (corrigida na demonstração manual com o chip): depois de ler o QR, o WhatsApp pede reinício (515) e a reconexão relia o arquivo da sessão, que ainda não tinha a gravação agrupada das credenciais pareadas; o WhatsApp então encerrava a sessão (401). Agora o estado de autenticação fica em memória entre reconexões e só é lido do arquivo na primeira conexão. No logout, o socket é encerrado e escritas tardias da biblioteca são ignoradas, para não recriar o arquivo da sessão morta. Teste: `test/unit/whatsapp/baileys-reconnect.test.ts`.
 - T003: o `npm run setup` reescrevia o `.env` inteiro a cada execução; isso geraria chave nova e exigiria novo pareamento. Agora `scripts/env-file.mjs` preserva `PALANTIR_WHATSAPP_ENABLED`, `PALANTIR_WA_SESSION_KEY`, `PALANTIR_WA_SESSION_DIR` e `PALANTIR_WHATSAPP_HEALTH_PORT` do `.env` anterior.
 - T004: os recibos ficaram no módulo `agent` (`InboundReceipts`), injetados no adaptador pela composição.
 - T005/T007: a normalização de número ficou em `src/shared/phone.ts`, usada pela identidade (cadastro) e pelo canal (remetente), para os dois lados compararem a mesma forma.
