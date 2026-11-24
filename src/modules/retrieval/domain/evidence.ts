@@ -7,6 +7,10 @@ export interface Evidence {
   readonly sourceTitle: string;
   readonly sentAt: Date;
   readonly kind: string;
+  /** Faixa do áudio de onde o trecho saiu e a duração do áudio (feature 005, RN-05). */
+  readonly audioStartS?: number;
+  readonly audioEndS?: number;
+  readonly durationSeconds?: number;
 }
 
 /** Baixa confiança: nenhum resultado ou melhor score abaixo do limiar (RF-12). */

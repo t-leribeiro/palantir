@@ -10,7 +10,7 @@ import type {
   IngestOutcome,
   KnowledgeChannel,
 } from "../../contracts/channel/knowledge-channel.js";
-import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
+import { CONTRACT_VERSION, MediaUnavailableError } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
 import { newId, systemClock, type Clock, type IdGenerator } from "../../shared/index.js";
 import { splitForChannel } from "../shared/split.js";
@@ -134,6 +134,9 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
     },
     onAgentMessage(handler) {
       onAgent = handler;
+    },
+    async fetchMedia() {
+      throw new MediaUnavailableError("unsupported");
     },
     async sendReply(destinationAccountId, reply) {
       const parts = splitForChannel(reply, MAX_MESSAGE_LENGTH);

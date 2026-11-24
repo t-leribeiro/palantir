@@ -4,12 +4,16 @@ import {
   createIngestMessage,
   type IndexJob,
   type IngestionTx,
+  type MediaJob,
+  type NewAttachment,
   type NewMessage,
   type ReconcileDirection,
   type SourceAuthorization,
   type SourceCheck,
 } from "../../../src/modules/ingestion/index.js";
-import { canonicalMessage } from "../../support/messages.js";
+import type { CanonicalMessage } from "../../../src/contracts/channel/knowledge-channel.js";
+import { canonicalMessage, withoutText } from "../../support/messages.js";
+import { one } from "../../support/rows.js";
 
 const AUTHORIZED: SourceCheck = { status: "authorized", sourceId: "src-1", spaceId: "space-1" };
 
@@ -18,6 +22,8 @@ function memoryStore() {
   const jobs: IndexJob[] = [];
   const candidateQueries: { sourceId: string; direction: ReconcileDirection; from: Date; to: Date }[] = [];
   const attached: { id: string; captureMethod: string; direction: ReconcileDirection }[] = [];
+  const attachments: { id: string; messageId: string; attachment: NewAttachment; processing: string }[] = [];
+  const mediaJobs: MediaJob[] = [];
   const keyOf = (m: NewMessage) => (m.importKey && !m.externalMessageId ? { importKey: m.importKey } : { externalMessageId: m.externalMessageId });
   let committed = 0;
   let failNextEnqueue = false;
@@ -55,8 +61,26 @@ function memoryStore() {
         messages[i] = direction === "import_to_live" ? { ...current, importKey: m.importKey } : { ...current, externalMessageId: m.externalMessageId };
         attached.push({ id, captureMethod: m.provenance.captureMethod, direction });
       },
+      async audioReconcileCandidates(query) {
+        const missing = query.direction === "import_to_live" ? "importKey" : "externalMessageId";
+        const present = query.direction === "import_to_live" ? "externalMessageId" : "importKey";
+        return messages
+          .filter((x) => x.sourceId === query.sourceId && x.kind === "audio" && !x[missing] && x[present])
+          .filter((x) => x.sentAt >= query.from && x.sentAt <= query.to)
+          .filter((x) => attachments.some((a) => a.messageId === x.id && a.attachment.sha256 === query.sha256))
+          .map((x) => ({ id: x.id, sentAt: x.sentAt, authorName: x.sender.displayName }));
+      },
+      async insertAttachment(messageId, attachment, processing) {
+        const id = `att-${attachments.length + 1}`;
+        attachments.push({ id, messageId, attachment, processing });
+        return id;
+      },
     },
     jobs: {
+      processes: (kind) => kind === "audio",
+      async enqueueMedia(job) {
+        mediaJobs.push(job);
+      },
       async enqueueIndex(job) {
         if (failNextEnqueue) {
           failNextEnqueue = false;
@@ -69,6 +93,8 @@ function memoryStore() {
   return {
     messages,
     jobs,
+    attachments,
+    mediaJobs,
     candidateQueries,
     attached,
     get committed() {
@@ -276,5 +302,89 @@ describe("reconciliação ao vivo × importada (feature 004, D-09)", () => {
     await ingest({ ...audio, source: { ...withoutId, importKey: KEY } });
     await ingest(canonicalMessage({ source: { ...canonicalMessage().source, importKey: KEY, externalMessageId: "X" } }));
     expect(store.candidateQueries).toHaveLength(0);
+  });
+});
+
+describe("ingestão com anexos (feature 005, D-12, D-16)", () => {
+  const SHA = "c".repeat(64);
+  type Att = CanonicalMessage["attachments"][number];
+  const stored: Att = { id: "a1", mimeType: "audio/ogg", status: "stored", storageKey: `space-1/src-1/${SHA}`, sha256: SHA, sizeBytes: 900, durationSeconds: 30 };
+
+  function audio(overrides: Partial<CanonicalMessage>, attachment: Att = stored) {
+    return withoutText(canonicalMessage({ contractVersion: "1.3.0", kind: "audio", attachments: [attachment], ...overrides }));
+  }
+
+  const importedSource = { provider: "fake", accountId: "fake-operator", conversationId: "fake-group-1", importKey: "d".repeat(64) };
+  const importProvenance = { captureMethod: "export_import" as const, capturedAt: "2026-11-22T11:00:00-03:00", adapter: "whatsapp-export" };
+
+  it("áudio guardado: anexo pendente e job media.process com prioridade 10 do ao vivo", async () => {
+    const { ingest, store } = setup();
+    const outcome = await ingest(audio({}));
+    expect(outcome.outcome).toBe("accepted");
+    expect(store.attachments).toEqual([
+      {
+        id: "att-1",
+        messageId: one(store.messages).id,
+        processing: "pending",
+        attachment: {
+          mediaKind: "audio",
+          mimeType: "audio/ogg",
+          sizeBytes: 900,
+          sha256: SHA,
+          storageKey: `space-1/src-1/${SHA}`,
+          durationSeconds: 30,
+          storageStatus: "stored",
+          unavailableReason: undefined,
+        },
+      },
+    ]);
+    expect(store.mediaJobs).toEqual([{ attachmentId: "att-1", spaceId: "space-1", priority: 10, durationSeconds: 30 }]);
+    expect(store.jobs).toHaveLength(1);
+  });
+
+  it("áudio importado tem prioridade 0", async () => {
+    const { ingest, store } = setup();
+    await ingest(audio({ source: importedSource, provenance: importProvenance }));
+    expect(store.mediaJobs[0]?.priority).toBe(0);
+  });
+
+  it("anexo indisponível é gravado como not_applicable, sem job de mídia", async () => {
+    const { ingest, store } = setup();
+    await ingest(audio({}, { id: "a1", mimeType: "audio/ogg", status: "unavailable", unavailableReason: "missing_in_export" }));
+    expect(store.attachments[0]).toMatchObject({ processing: "not_applicable", attachment: { storageStatus: "unavailable", unavailableReason: "missing_in_export" } });
+    expect(store.mediaJobs).toEqual([]);
+  });
+
+  it("tipo sem processador (imagem) é guardado sem job", async () => {
+    const { ingest, store } = setup();
+    await ingest(withoutText(canonicalMessage({ contractVersion: "1.3.0", kind: "image", attachments: [stored] })));
+    expect(store.attachments[0]).toMatchObject({ processing: "not_applicable", attachment: { mediaKind: "image" } });
+    expect(store.mediaJobs).toEqual([]);
+  });
+
+  it("anexo anunciado e não preparado é recusado como inválido, sem gravar", async () => {
+    const { ingest, store } = setup();
+    const outcome = await ingest(audio({}, { id: "a1", mimeType: "audio/ogg", fetchRef: "ref" }));
+    expect(outcome).toEqual({ outcome: "rejected", reason: "invalid" });
+    expect(store.messages).toEqual([]);
+  });
+
+  it("D-16: o mesmo arquivo importado depois do ao vivo reconcilia; não grava anexo nem job novos", async () => {
+    const { ingest, store } = setup();
+    const live = await ingest(audio({ timestamp: "2026-11-22T10:00:20-03:00" }));
+    const imported = await ingest(audio({ source: importedSource, provenance: importProvenance }));
+    expect(imported).toEqual({ outcome: "reconciled", messageId: live.outcome === "accepted" ? live.messageId : "" });
+    expect(store.attachments).toHaveLength(1);
+    expect(store.mediaJobs).toHaveLength(1);
+  });
+
+  it("arquivo diferente, ou sem hash, não reconcilia", async () => {
+    const { ingest } = setup();
+    await ingest(audio({}));
+    const other = { ...stored, sha256: "e".repeat(64), storageKey: `space-1/src-1/${"e".repeat(64)}` };
+    expect((await ingest(audio({ source: importedSource, provenance: importProvenance }, other))).outcome).toBe("accepted");
+    const missing: Att = { id: "a1", mimeType: "audio/ogg", status: "unavailable", unavailableReason: "missing_in_export" };
+    const third = { ...importedSource, importKey: "f".repeat(64) };
+    expect((await ingest(audio({ source: third, provenance: importProvenance }, missing))).outcome).toBe("accepted");
   });
 });

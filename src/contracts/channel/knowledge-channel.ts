@@ -4,7 +4,7 @@ import type { AgentReply, CanonicalMessage } from "./generated.js";
 
 export type { AgentReply, CanonicalMessage, Citation } from "./generated.js";
 
-export const CONTRACT_VERSION = "1.2.0";
+export const CONTRACT_VERSION = "1.3.0";
 
 export interface ConversationRef {
   readonly conversationId: string;
@@ -54,4 +54,24 @@ export interface KnowledgeChannel {
   onAgentMessage(handler: AgentHandler): void;
   /** Entrega uma resposta, renderizada para o canal, à conta de destino. */
   sendReply(destinationAccountId: string, reply: AgentReply): Promise<void>;
+  /**
+   * Baixa o binário de um anexo anunciado em `attachments[].fetchRef` (1.3.0). Só para fonte autorizada: o
+   * núcleo decide guardar e chama depois de conferir a autorização. Falha com `MediaUnavailableError`.
+   */
+  fetchMedia(fetchRef: string): Promise<MediaContent>;
+}
+
+export interface MediaContent {
+  readonly bytes: Uint8Array;
+  readonly mimeType: string;
+}
+
+/** Por que o binário não está disponível; `download_failed` admite nova tentativa, os demais não. */
+export type MediaUnavailableReason = "unsupported" | "expired" | "download_failed" | "too_large";
+
+export class MediaUnavailableError extends Error {
+  constructor(readonly reason: MediaUnavailableReason) {
+    super(`mídia indisponível: ${reason}`);
+    this.name = "MediaUnavailableError";
+  }
 }

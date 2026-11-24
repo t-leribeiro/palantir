@@ -36,3 +36,33 @@ describe("mergeEnv", () => {
     expect(mergeEnv(generated, "PALANTIR_WA_SESSION_KEY=\n", fixedKey)).toContain(`PALANTIR_WA_SESSION_KEY=${fixedKey()}`);
   });
 });
+
+describe("mergeEnv com mídia (feature 005, D-05)", () => {
+  const generated = "PALANTIR_WA_SESSION_KEY=\nPALANTIR_MEDIA_KEY=\nPALANTIR_TRANSCRIBER_MODEL=Systran/faster-whisper-small\n";
+
+  it("gera a chave de mídia quando falta, separada da chave da sessão", () => {
+    let n = 0;
+    const keys = () => `CHAVE${++n}`;
+    const merged = parseEnv(mergeEnv(generated, "", keys));
+    expect(merged.PALANTIR_MEDIA_KEY).toMatch(/^CHAVE\d$/);
+    expect(merged.PALANTIR_WA_SESSION_KEY).toMatch(/^CHAVE\d$/);
+    expect(merged.PALANTIR_MEDIA_KEY).not.toBe(merged.PALANTIR_WA_SESSION_KEY);
+  });
+
+  it("preserva a chave de mídia, o modelo escolhido, o liga/desliga e os tipos guardados", () => {
+    const previous = [
+      "PALANTIR_MEDIA_KEY=MIDIA",
+      "PALANTIR_TRANSCRIBER_MODEL=Systran/faster-whisper-medium",
+      "PALANTIR_TRANSCRIPTION=off",
+      "PALANTIR_MEDIA_STORE_KINDS=audio,image",
+      "PALANTIR_TRANSCRIBE_CONCURRENCY=2",
+      "",
+    ].join("\n");
+    const merged = parseEnv(mergeEnv(generated, previous, fixedKey));
+    expect(merged.PALANTIR_MEDIA_KEY).toBe("MIDIA");
+    expect(merged.PALANTIR_TRANSCRIBER_MODEL).toBe("Systran/faster-whisper-medium");
+    expect(merged.PALANTIR_TRANSCRIPTION).toBe("off");
+    expect(merged.PALANTIR_MEDIA_STORE_KINDS).toBe("audio,image");
+    expect(merged.PALANTIR_TRANSCRIBE_CONCURRENCY).toBe("2");
+  });
+});

@@ -53,3 +53,24 @@ describe("compositor determinístico de respostas", () => {
     expect(validateCitations([], [], "no_evidence")).toBe(true);
   });
 });
+
+describe("citação de áudio (feature 005, RN-05, D-15)", () => {
+  const audio = (extra: Partial<Evidence>): Evidence => ({ ...ev(1, "falei do Temporal aqui"), kind: "audio", ...extra });
+
+  it("mostra a duração e o ponto do trecho e leva a faixa na citação", () => {
+    const reply = composeAnswer([audio({ audioStartS: 37.4, audioEndS: 52, durationSeconds: 102 })]);
+    expect(reply.text).toBe("Encontrei 1 mensagem sobre isso:\n\n1. Autor 1 em Grupo 1, 21/11/2026, áudio de 1:42, aos 0:37: “falei do Temporal aqui” [1]");
+    expect(reply.citations[0]).toMatchObject({ kind: "audio", audioStartS: 37.4, audioEndS: 52 });
+  });
+
+  it("sem duração conhecida, omite 'de m:ss'; áudio acima de 1 h usa h:mm:ss", () => {
+    expect(composeAnswer([audio({ audioStartS: 5, audioEndS: 9 })]).text).toContain("21/11/2026, áudio, aos 0:05:");
+    expect(composeAnswer([audio({ audioStartS: 3725, audioEndS: 3730, durationSeconds: 3800 })]).text).toContain("áudio de 1:03:20, aos 1:02:05");
+  });
+
+  it("áudio citado pela legenda (sem faixa) mostra só que é áudio; texto continua igual", () => {
+    expect(composeAnswer([audio({ durationSeconds: 20 })]).text).toContain("21/11/2026, áudio de 0:20: “");
+    expect(composeAnswer([audio({ durationSeconds: 20 })]).citations[0]).toMatchObject({ kind: "audio" });
+    expect(composeAnswer([ev(1)]).citations[0]).not.toHaveProperty("kind");
+  });
+});

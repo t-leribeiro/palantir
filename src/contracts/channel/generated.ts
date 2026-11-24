@@ -7,7 +7,7 @@
 export type ZonedDateTime = string;
 
 /**
- * Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004; 1.1.0 adiciona source.importKey).
+ * Mensagem normalizada entregue por qualquer adaptador de canal ao núcleo (contrato 1.x, ADR-0004; 1.1.0 adiciona source.importKey; 1.3.0 adiciona sha256, durationSeconds, status e unavailableReason ao anexo).
  */
 export interface CanonicalMessage {
   contractVersion: string;
@@ -37,6 +37,19 @@ export interface CanonicalMessage {
     sizeBytes?: number;
     storageKey?: string;
     fetchRef?: string;
+    /**
+     * SHA-256 do binário em claro, preenchido pelo núcleo ao preparar o anexo (1.3.0).
+     */
+    sha256?: string;
+    /**
+     * Duração do áudio ou vídeo em segundos, quando conhecida (1.3.0).
+     */
+    durationSeconds?: number;
+    /**
+     * Preenchido pelo núcleo ao preparar o anexo; ausente = ainda não preparado (1.3.0).
+     */
+    status?: "stored" | "unavailable";
+    unavailableReason?: "missing_in_export" | "download_failed" | "too_large" | "expired" | "unsupported";
   }[];
   provenance: {
     captureMethod: "live" | "export_import" | "forwarded_to_agent";
@@ -62,4 +75,16 @@ export interface Citation {
   author: string;
   sourceTitle: string;
   sentAt: string;
+  /**
+   * Tipo da mensagem citada (1.3.0).
+   */
+  kind?: "text" | "audio" | "image" | "document" | "link";
+  /**
+   * Início do trecho citado no áudio, em segundos (1.3.0).
+   */
+  audioStartS?: number;
+  /**
+   * Fim do trecho citado no áudio, em segundos (1.3.0).
+   */
+  audioEndS?: number;
 }

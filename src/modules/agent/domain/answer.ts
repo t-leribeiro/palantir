@@ -1,5 +1,6 @@
 import type { AgentReply, Citation } from "../../../contracts/channel/knowledge-channel.js";
 import type { Evidence } from "../../retrieval/index.js";
+import { formatClock } from "../../../shared/index.js";
 
 export const NO_EVIDENCE_TEXT = "Não encontrei evidências suficientes.";
 export const NOT_LINKED_TEXT =
@@ -33,14 +34,30 @@ export function composeAnswer(evidences: readonly Evidence[]): AgentReply {
     author: e.author,
     sourceTitle: e.sourceTitle,
     sentAt: e.sentAt.toISOString(),
+    ...audioCitation(e),
   }));
-  const lines = used.map((e, i) => `${i + 1}. ${e.author} em ${e.sourceTitle}, ${formatDate(e.sentAt)}: “${snippet(e.chunkText)}” [${i + 1}]`);
+  const lines = used.map((e, i) => `${i + 1}. ${e.author} em ${e.sourceTitle}, ${formatDate(e.sentAt)}${audioMark(e)}: “${snippet(e.chunkText)}” [${i + 1}]`);
   const header = used.length === 1 ? "Encontrei 1 mensagem sobre isso:" : `Encontrei ${used.length} mensagens sobre isso:`;
   return { text: `${header}\n\n${lines.join("\n")}`, outcome: "answered", citations };
 }
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: TIME_ZONE, day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
+/** Feature 005 (RN-05): citação de áudio leva o tipo e a faixa do trecho (contrato 1.3.0). */
+function audioCitation(e: Evidence): Pick<Citation, "kind" | "audioStartS" | "audioEndS"> {
+  if (e.kind !== "audio") return {};
+  return e.audioStartS === undefined || e.audioEndS === undefined
+    ? { kind: "audio" }
+    : { kind: "audio", audioStartS: e.audioStartS, audioEndS: e.audioEndS };
+}
+
+/** `, áudio de 1:42, aos 0:37`; sem duração conhecida, só o ponto; sem faixa, só "áudio". */
+function audioMark(e: Evidence): string {
+  if (e.kind !== "audio") return "";
+  const duration = e.durationSeconds === undefined ? "áudio" : `áudio de ${formatClock(e.durationSeconds)}`;
+  return e.audioStartS === undefined ? `, ${duration}` : `, ${duration}, aos ${formatClock(e.audioStartS)}`;
 }
 
 function snippet(text: string): string {

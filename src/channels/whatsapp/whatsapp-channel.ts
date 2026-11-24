@@ -10,7 +10,7 @@ import type {
   InboundHandler,
   KnowledgeChannel,
 } from "../../contracts/channel/knowledge-channel.js";
-import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
+import { CONTRACT_VERSION, MediaUnavailableError } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
 import { newId, systemClock, type Clock, type IdGenerator } from "../../shared/index.js";
 import { createGroupCapture, type CaptureObserver, type CapturePorts } from "./capture.js";
@@ -151,7 +151,8 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
       kind: CONTRACT_KIND[message.kind],
       ...(message.kind === "text" && message.text ? { text: message.text } : {}),
       isForwarded: false,
-      attachments: [],
+      // Contrato 1.3.0: áudio exige anexo. Ao agente, áudio ainda não é baixado (RN-09 da 005, S8 decide).
+      attachments: message.kind === "audio" ? [{ id: `${message.id}:0`, mimeType: "audio/ogg" }] : [],
       provenance: { captureMethod: "forwarded_to_agent", capturedAt: clock.now().toISOString(), adapter: WHATSAPP_ADAPTER },
     };
   }
@@ -259,6 +260,9 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
     },
     async sendReply(destinationAccountId, reply) {
       await deliver(toChatJid(destinationAccountId), reply);
+    },
+    async fetchMedia() {
+      throw new MediaUnavailableError("unsupported");
     },
     state: () => current,
   };

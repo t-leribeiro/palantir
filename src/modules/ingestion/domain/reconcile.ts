@@ -23,6 +23,14 @@ export function reconcileDirection(message: {
   readonly text: string | undefined;
 }): ReconcileDirection | undefined {
   if (!message.text || normalizeForMatch(message.text) === "") return undefined;
+  return keyDirection(message);
+}
+
+/** Sentido só pelas chaves; o áudio (feature 005, D-16) não tem texto e casa pelo SHA-256 do arquivo. */
+export function keyDirection(message: {
+  readonly externalMessageId: string | undefined;
+  readonly importKey: string | undefined;
+}): ReconcileDirection | undefined {
   if (message.importKey && !message.externalMessageId) return "import_to_live";
   if (message.externalMessageId && !message.importKey) return "live_to_import";
   return undefined;

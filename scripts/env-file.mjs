@@ -1,5 +1,6 @@
-// Leitura e mescla do .env gerado pelo setup (feature 003, RF-02): as variáveis do WhatsApp do .env
-// anterior são preservadas, e a chave da sessão só é gerada quando falta. Trocar a chave obriga a parear de novo.
+// Leitura e mescla do .env gerado pelo setup (feature 003, RF-02; feature 005, D-05): as variáveis do WhatsApp
+// e da mídia do .env anterior são preservadas, e as chaves só são geradas quando faltam. Trocar a chave da
+// sessão obriga a parear de novo; trocar a de mídia torna ilegíveis os áudios já guardados.
 import { randomBytes } from "node:crypto";
 
 export const PRESERVED = [
@@ -8,7 +9,20 @@ export const PRESERVED = [
   "PALANTIR_WA_SESSION_KEY",
   "PALANTIR_WA_SESSION_DIR",
   "PALANTIR_WHATSAPP_HEALTH_PORT",
+  // Mídia e transcrição (feature 005): trocar a chave de mídia torna os áudios guardados ilegíveis.
+  "PALANTIR_MEDIA_KEY",
+  "PALANTIR_MEDIA_STORE_KINDS",
+  "PALANTIR_TRANSCRIPTION",
+  "PALANTIR_TRANSCRIBER",
+  "PALANTIR_TRANSCRIBER_URL",
+  "PALANTIR_TRANSCRIBER_MODEL",
+  "PALANTIR_TRANSCRIBER_ALLOW_REMOTE",
+  "PALANTIR_TRANSCRIBER_API_KEY",
+  "PALANTIR_TRANSCRIBE_CONCURRENCY",
 ];
+
+/** Chaves geradas quando faltam: a da sessão do WhatsApp (S2) e a dos arquivos de mídia (S4). */
+const GENERATED_KEYS = ["PALANTIR_WA_SESSION_KEY", "PALANTIR_MEDIA_KEY"];
 
 export function parseEnv(text) {
   const out = {};
@@ -27,7 +41,9 @@ export function mergeEnv(generated, previous, makeKey = newSessionKey) {
   for (const name of PRESERVED) {
     if (old[name]) content = setVar(content, name, old[name]);
   }
-  if (!parseEnv(content).PALANTIR_WA_SESSION_KEY) content = setVar(content, "PALANTIR_WA_SESSION_KEY", makeKey());
+  for (const name of GENERATED_KEYS) {
+    if (!parseEnv(content)[name]) content = setVar(content, name, makeKey());
+  }
   return content;
 }
 

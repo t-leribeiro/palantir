@@ -12,8 +12,8 @@ function indexer(message: IndexableMessage | null) {
   const chunks: Chunk[] = [];
   const index = createIndexMessage({
     loadMessage: async () => message,
-    upsertChunk: async (c) => {
-      chunks.push(c);
+    replaceChunks: async (_messageId, replaced) => {
+      chunks.splice(0, chunks.length, ...replaced);
     },
   });
   return { index, chunks };
