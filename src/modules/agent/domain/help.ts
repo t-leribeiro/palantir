@@ -7,6 +7,13 @@ export const HELP_TEXT = [
   "Experimente perguntar:",
   "• Quem recomendou o Temporal?",
   "• O que falaram sobre Kafka?",
+  "• Em qual áudio do T3 falaram de Temporal?",
+  "",
+  "Seus grupos:",
+  "• grupos: lista seus grupos e conversas (mais: próxima página)",
+  "• acompanhar 4: passa a guardar as mensagens novas do grupo 4",
+  "• parar T3: para de guardar; o histórico continua",
+  "• apagar T3: apaga o grupo e tudo o que veio dele",
   "",
   "Por enquanto eu só entendo mensagens de texto.",
 ].join("\n");

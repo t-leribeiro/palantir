@@ -45,31 +45,49 @@
 | T011 | **Pedido de exclusão** (D-07), numa transação:<br>• confere o estado de novo;<br>• `deleting`;<br>• revoga a captura;<br>• `source_deletions` com `notify_*`;<br>• `source.deletion_requested`;<br>• outbox `sources.delete`.<br>"Já em exclusão" responde sem erro. Testes | T002, T010 | - | `src/modules/sources/application/request-deletion.ts` | 🟢 | `[X]` |
 | T012 | **Purga de mídia por fonte** (D-08): `deletePrefix` no armazenamento (`ListObjectsV2` paginado, `DeleteObjects` com até 1.000 chaves, idempotente) e porta `MediaPurger.purgeSource(spaceId, sourceId)` exportada pelo módulo `media`. Teste de integração com o SeaweedFS | - | `[//]` | `src/modules/media/infrastructure/object-store/s3-object-store.ts` | 🟡 | `[X]` |
 | T013 | **Execução do job `sources.delete`** (D-08, D-09), conforme `interfaces/jobs-exclusao-e-aviso.md` §1:<br>• carregar e sair se já concluída;<br>• contar;<br>• purgar;<br>• `DELETE` em cascata e limpeza do estado da conversa;<br>• concluir, auditar `source.deleted` e publicar `agent.notify` pelo outbox.<br>Passa o T003 | T011, T012 | - | `src/modules/sources/application/execute-deletion.ts` | 🟡 | `[X]` |
-| T014 | **Estado curto da conversa** (D-02): repositório de `agent_conversation_state`, com:<br>• gravar a lista e a página;<br>• gravar a ação pendente;<br>• consumir a pendente de forma atômica (`UPDATE … RETURNING`, com prazo);<br>• ler com expiração.<br>Testes de integração | T001 | `[//]` | `src/modules/agent/infrastructure/pg-conversation-state.ts` | 🟡 | `[ ]` |
-| T015 | **Caminho da conta pendente no agente** (D-20, RN-02), antes de tudo:<br>• desconhecida: política atual;<br>• `pending` com 6 dígitos: verificar, com as respostas de `interfaces/comandos-do-agente.md` §3;<br>• `pending` com outro texto: a instrução.<br>Nenhuma busca para `pending`. Testes | T007 | - | `src/modules/agent/application/ask-question.ts` | 🟢 | `[ ]` |
-| T016 | **Comandos de gestão no agente** (RF-02 a RF-05, RF-08, RF-10): `manage-sources.ts` orquestra a ação pendente, depois o comando e depois a ajuda, com as portas `SourceManagement`, `ConversationState` e o pedido de exclusão. Respostas e erros de `interfaces/comandos-do-agente.md` §2 e §4. A ajuda ganha "Seus grupos" (D-18). Testes por cenário | T005, T006, T010, T011, T014, T015 | - | `src/modules/agent/application/manage-sources.ts` | 🟡 | `[ ]` |
-| T017 | **Filtro por grupo na pergunta** (D-14, RN-11):<br>• `questionScope` recebe o catálogo, reconhece o nome completo mais longo e o tira da pergunta;<br>• nome repetido devolve as opções;<br>• a `SearchRequest` ganha `sourceIds`, com o filtro `m.source_id = ANY($6)` no SQL.<br>Testes unitários e de integração (combinado com "em qual áudio") | T010 | `[//]` | `src/modules/agent/domain/question.ts` | 🟡 | `[ ]` |
+| T014 | **Estado curto da conversa** (D-02): repositório de `agent_conversation_state`, com:<br>• gravar a lista e a página;<br>• gravar a ação pendente;<br>• consumir a pendente de forma atômica (`UPDATE … RETURNING`, com prazo);<br>• ler com expiração.<br>Testes de integração | T001 | `[//]` | `src/modules/agent/infrastructure/pg-conversation-state.ts` | 🟡 | `[X]` |
+| T015 | **Caminho da conta pendente no agente** (D-20, RN-02), antes de tudo:<br>• desconhecida: política atual;<br>• `pending` com 6 dígitos: verificar, com as respostas de `interfaces/comandos-do-agente.md` §3;<br>• `pending` com outro texto: a instrução.<br>Nenhuma busca para `pending`. Testes | T007 | - | `src/modules/agent/application/ask-question.ts` | 🟢 | `[X]` |
+| T016 | **Comandos de gestão no agente** (RF-02 a RF-05, RF-08, RF-10): `manage-sources.ts` orquestra a ação pendente, depois o comando e depois a ajuda, com as portas `SourceManagement`, `ConversationState` e o pedido de exclusão. Respostas e erros de `interfaces/comandos-do-agente.md` §2 e §4. A ajuda ganha "Seus grupos" (D-18). Testes por cenário | T005, T006, T010, T011, T014, T015 | - | `src/modules/agent/application/manage-sources.ts` | 🟡 | `[X]` |
+| T017 | **Filtro por grupo na pergunta** (D-14, RN-11):<br>• `questionScope` recebe o catálogo, reconhece o nome completo mais longo e o tira da pergunta;<br>• nome repetido devolve as opções;<br>• a `SearchRequest` ganha `sourceIds`, com o filtro `m.source_id = ANY($6)` no SQL.<br>Testes unitários e de integração (combinado com "em qual áudio") | T010 | `[//]` | `src/modules/agent/domain/question.ts` | 🟡 | `[X]` |
 
 ## Fase 4, Integração
 
 | ID | Descrição | Dependências | Paralelismo | Arquivo alvo | Confidência | Status |
 |----|-----------|--------------|-------------|--------------|-------------|--------|
-| T018 | **Composição:**<br>• `createAskQuestion` recebe a verificação, a gestão, o estado, o catálogo e a auditoria, na API (canal de teste) e no processo do WhatsApp;<br>• o worker consome `sources.delete` com o `MediaPurger`;<br>• o processo do WhatsApp sempre com fila.<br>Passa o T004 até o aviso | T008, T013, T016, T017 | - | `src/main/compose.ts` | 🟡 | `[ ]` |
-| T019 | **Consumidor de `agent.notify`** (D-10), conforme `interfaces/jobs-exclusao-e-aviso.md` §2:<br>• reivindicar `notified_at`;<br>• `sendReply`;<br>• devolver em caso de falha;<br>• limpar `notify_title`.<br>Ligado no processo do WhatsApp e na API. O canal de teste guarda os envios numa lista consultável pelo E2E. Passa o T004 completo | T018 | - | `src/main/notify.ts` | 🟡 | `[ ]` |
-| T020 | **Comandos de terminal** conforme `interfaces/cli-vinculo-grupos-auditoria.md` §2 e §3: `whatsapp:grupos -- apagar <grupo> --confirmar "<nome>"` (RF-13) e o comando novo `npm run auditoria` (RF-09), com telefone mascarado e fonte apagada como "(apagada)". Testes dos dois | T009, T011 | `[//]` | `src/main/audit.ts` | 🟡 | `[ ]` |
-| T021 | **E2E pelo WhatsApp simulado** (RF-11):<br>• verificação, listar, acompanhar, parar, apagar com aviso e filtro por grupo pelo provedor simulado;<br>• mensagem ao vivo de grupo em exclusão descartada sem download (RF-07);<br>• comando escrito dentro de um grupo não executa;<br>• remetente desconhecido em silêncio | T019 | - | `test/e2e/whatsapp-management.test.ts` | 🟢 | `[ ]` |
+| T018 | **Composição:**<br>• `createAskQuestion` recebe a verificação, a gestão, o estado, o catálogo e a auditoria, na API (canal de teste) e no processo do WhatsApp;<br>• o worker consome `sources.delete` com o `MediaPurger`;<br>• o processo do WhatsApp sempre com fila.<br>Passa o T004 até o aviso | T008, T013, T016, T017 | - | `src/main/compose.ts` | 🟡 | `[X]` |
+| T019 | **Consumidor de `agent.notify`** (D-10), conforme `interfaces/jobs-exclusao-e-aviso.md` §2:<br>• reivindicar `notified_at`;<br>• `sendReply`;<br>• devolver em caso de falha;<br>• limpar `notify_title`.<br>Ligado no processo do WhatsApp e na API. O canal de teste guarda os envios numa lista consultável pelo E2E. Passa o T004 completo | T018 | - | `src/main/notify.ts` | 🟡 | `[X]` |
+| T020 | **Comandos de terminal** conforme `interfaces/cli-vinculo-grupos-auditoria.md` §2 e §3: `whatsapp:grupos -- apagar <grupo> --confirmar "<nome>"` (RF-13) e o comando novo `npm run auditoria` (RF-09), com telefone mascarado e fonte apagada como "(apagada)". Testes dos dois | T009, T011 | `[//]` | `src/main/audit.ts` | 🟡 | `[X]` |
+| T021 | **E2E pelo WhatsApp simulado** (RF-11):<br>• verificação, listar, acompanhar, parar, apagar com aviso e filtro por grupo pelo provedor simulado;<br>• mensagem ao vivo de grupo em exclusão descartada sem download (RF-07);<br>• comando escrito dentro de um grupo não executa;<br>• remetente desconhecido em silêncio | T019 | - | `test/e2e/whatsapp-management.test.ts` | 🟢 | `[X]` |
 
 ## Fase 5, Polimento
 
 | ID | Descrição | Dependências | Paralelismo | Arquivo alvo | Confidência | Status |
 |----|-----------|--------------|-------------|--------------|-------------|--------|
-| T022 | **Observabilidade** (D-16), sem nomes nem telefones nos rótulos:<br>• métricas de comandos, exclusões (em andamento, mais antiga, duração, itens) e avisos;<br>• painel "Gestão" no Grafana;<br>• alerta `SourceDeletionStalled`, validado pelo `promtool`;<br>• teste que procura nomes de grupo e telefones nos logs do E2E | T018 | `[//]` | `infra/local/config/grafana/dashboards/gestao.json` | 🟡 | `[ ]` |
-| T023 | **`media:conferir` conta os objetos sem fonte**: prefixos `<space>/<source>/` cuja fonte não existe mais, para conferir a exclusão. Teste | T012 | `[//]` | `scripts/media-conferir.ts` | 🟡 | `[ ]` |
-| T024 | **Documentação:**<br>• ADR-0011 (gestão pelo agente, verificação, exclusão em duas etapas, base legal por consentimento, que fecha a OQ-01);<br>• README, `CLAUDE.md` e `AGENTS.md` com os comandos novos;<br>• `docs/plano-de-fatias.md` com a S5 🔄 e a linha de histórico | T021, T022 | - | `docs/adr/0011-gestao-de-fontes-pelo-agente.md` | 🟢 | `[ ]` |
+| T022 | **Observabilidade** (D-16), sem nomes nem telefones nos rótulos:<br>• métricas de comandos, exclusões (em andamento, mais antiga, duração, itens) e avisos;<br>• painel "Gestão" no Grafana;<br>• alerta `SourceDeletionStalled`, validado pelo `promtool`;<br>• teste que procura nomes de grupo e telefones nos logs do E2E | T018 | `[//]` | `infra/local/config/grafana/dashboards/gestao.json` | 🟡 | `[X]` |
+| T023 | **`media:conferir` conta os objetos sem fonte**: prefixos `<space>/<source>/` cuja fonte não existe mais, para conferir a exclusão. Teste | T012 | `[//]` | `scripts/media-conferir.ts` | 🟡 | `[X]` |
+| T024 | **Documentação:**<br>• ADR-0011 (gestão pelo agente, verificação, exclusão em duas etapas, base legal por consentimento, que fecha a OQ-01);<br>• README, `CLAUDE.md` e `AGENTS.md` com os comandos novos;<br>• `docs/plano-de-fatias.md` com a S5 🔄 e a linha de histórico | T021, T022 | - | `docs/adr/0011-gestao-de-fontes-pelo-agente.md` | 🟢 | `[X]` |
 
 ## Notas de execução
 
-(vazio até o `/reversa-coding`)
+- **T001:** o canal de teste (`fake`) não volta a pendente na migração (D-12). O seed já gravava `verified_at` nas contas novas.
+- **T008:** o `whatsapp:link` devolve o código, e os testes que precisam de conta ativa usam `test/support/link.ts` (`linkVerified`): os E2E da S2 a S4 e a integração da S2.
+- **T010:**
+  - o serviço de gestão separa conferir (`checkFollow`) de acompanhar (`follow`): o agente confere, pede a confirmação e só então acompanha;
+  - voltar a acompanhar um grupo parado reaproveita a fonte da autorização anterior;
+  - na lista, a fonte que não é importada nem grupo do número aparece como "conversa" (por exemplo, a do canal de teste).
+- **T012:** a purga apaga um objeto por vez (`DeleteObject`), porque o `DeleteObjects` em lote exige um checksum que o SeaweedFS não confere.
+- **T018:**
+  - o aviso de exclusão vai para uma fila por canal, `agent.notify.<canal>`: com a API e o WhatsApp no ar, uma fila só deixaria o aviso cair no processo errado;
+  - o processo do WhatsApp sempre abre a fila, mesmo com a captura desligada.
+- **T020:** a confirmação do `apagar` no terminal virou `--nome`, porque `--confirmar` já era um sinal sem valor do `autorizar`. O `autorizar` e o `revogar` do terminal passaram a gravar auditoria (RN-09).
+- **T022:**
+  - as métricas seguem o padrão do projeto, sem o prefixo `palantir_`;
+  - o contador de comandos tem só o tipo do comando, sem o resultado;
+  - o alerta `SourceDeletionStalled` passou no `promtool` (5 regras);
+  - o E2E do WhatsApp confere que os logs não têm nome de grupo, telefone nem o código.
+- **Verificação local:**
+  - unitários, integração (73) e E2E da S5 passaram;
+  - no E2E completo, só a medição de carga da S1 falhou: 172 s contra o limite de 120 s. É o mesmo problema de ambiente desta máquina registrado na S4, e a esteira roda essa medição à parte.
 
 ## Histórico de alterações
 

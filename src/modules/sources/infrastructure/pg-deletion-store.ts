@@ -1,6 +1,6 @@
 import { withTransaction, type Pool, type PoolClient } from "../../../platform/db/index.js";
 import type { JobQueue } from "../../../platform/queue/index.js";
-import { DELETION_NOTICE_QUEUE, SOURCE_DELETE_QUEUE, type SourceDeleteJob } from "../domain/deletion.js";
+import { DELETION_NOTICE_QUEUE, SOURCE_DELETE_QUEUE, noticeQueueFor, type SourceDeleteJob } from "../domain/deletion.js";
 import type { DeletionRecord, DeletionRequest, DeletionStore, RequestDeletionResult } from "../application/request-deletion.js";
 import { insertAuditEvent } from "./pg-audit-log.js";
 
@@ -42,20 +42,23 @@ interface CompletedRow {
   audios_deleted: number | null;
   objects_deleted: number;
   notify_account: string | null;
+  notify_provider: string | null;
 }
 
 async function completeIn(db: PoolClient, queue: JobQueue, notifyQueue: string, deletionId: string, objects: number): Promise<boolean> {
   const { rows } = await db.query<CompletedRow>(
     `UPDATE source_deletions SET completed_at = now(), objects_deleted = COALESCE(objects_deleted, 0) + $2
       WHERE id = $1 AND completed_at IS NULL
-      RETURNING source_id, messages_deleted, audios_deleted, objects_deleted, notify_account`,
+      RETURNING source_id, messages_deleted, audios_deleted, objects_deleted, notify_account, notify_provider`,
     [deletionId, objects],
   );
   const row = rows[0];
   if (!row) return false;
   const details = { messages: row.messages_deleted ?? 0, audios: row.audios_deleted ?? 0, objects: row.objects_deleted };
   await insertAuditEvent(db, { actorUserId: null, action: "source.deleted", targetKind: "source", targetId: row.source_id, details });
-  if (row.notify_account) await queue.sendInTransaction(db, notifyQueue, { kind: "source_deleted", deletionId }, { singletonKey: deletionId });
+  if (row.notify_account && row.notify_provider) {
+    await queue.sendInTransaction(db, noticeQueueFor(notifyQueue, row.notify_provider), { kind: "source_deleted", deletionId }, { singletonKey: deletionId });
+  }
   return true;
 }
 

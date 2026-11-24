@@ -9,7 +9,7 @@
 
 ```
 $ npm run whatsapp:link -- "+55 11 98888-7777"
-Número +55 11 9••••-7777 vinculado e aguardando verificação.
+Número +55 11 9****-**77: vinculado e aguardando verificação.
 Mande este código ao agente pelo WhatsApp, deste número, em até 10 minutos:
 
     482 913
@@ -32,14 +32,14 @@ O código só aparece no terminal: ele nunca é registrado em log, métrica ou b
 O comando continua igual ao da S3 (`listar`, `autorizar`, `revogar`) e passa a usar o serviço de gestão. Acréscimo (RF-13, Could):
 
 ```
-$ npm run whatsapp:grupos -- apagar 4 --confirmar "Projeto X"
+$ npm run whatsapp:grupos -- apagar 4 --nome "Projeto X"
 Apagando "Projeto X". Acompanhe com: npm run auditoria
 ```
 
 | Situação | Saída | Código |
 |----------|-------|--------|
-| `--confirmar` diferente do nome do grupo ou da conversa | `A confirmação precisa ser o nome exato: "Projeto X".` | 1 |
-| Sem `--confirmar` | uso | 2 |
+| `--nome` diferente do nome do grupo | `A confirmação precisa ser o nome exato: "Projeto X".` | 1 |
+| Sem `--nome` | `Para apagar, confirme com --nome "<nome do grupo>".` | 1 |
 | Já em exclusão | `"Projeto X" já está sendo apagado.` | 0 |
 
 O aviso de conclusão vai para a conta verificada do dono, se houver uma. Auditoria com `channel = cli`.
@@ -59,3 +59,5 @@ Quando              Ação                       Alvo                    Por    
 - O telefone aparece mascarado.
 - A saída nunca mostra texto de mensagem.
 - Lê só o banco: não precisa do WhatsApp conectado.
+
+> Execução (2026-11-24): `--confirmar` já era um sinal sem valor do `autorizar` (S3), então a confirmação do `apagar` virou `--nome`. O número aparece no formato de máscara do projeto (`+55 11 9****-**77`).

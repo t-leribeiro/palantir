@@ -1,5 +1,5 @@
 export type { IngestDecision, Source, SourceKind, SourceStatus } from "./domain/source.js";
-export { DELETION_NOTICE_QUEUE, SOURCE_DELETE_QUEUE, type SourceDeleteJob } from "./domain/deletion.js";
+export { DELETION_NOTICE_QUEUE, SOURCE_DELETE_QUEUE, noticeQueueFor, type SourceDeleteJob } from "./domain/deletion.js";
 export { decideIngestion } from "./domain/source.js";
 export {
   createIsSourceAuthorized,
@@ -78,3 +78,6 @@ export {
 } from "./application/request-deletion.js";
 export { createExecuteSourceDeletion, type ExecuteSourceDeletion, type MediaPurger } from "./application/execute-deletion.js";
 export { createPgDeletionStore } from "./infrastructure/pg-deletion-store.js";
+export { createPgDeletionNotices, type ClaimedNotice, type DeletionNotices } from "./infrastructure/pg-deletion-notices.js";
+export { createOtelManagementObserver, type ManagementObserver } from "./infrastructure/otel-management-observer.js";
+export { completedDeletion, deletionsInProgress } from "./infrastructure/pg-deletion-stats.js";

@@ -14,3 +14,6 @@ export interface SourceDeleteJob {
  * módulo do agente, conferido em teste, sem o módulo de fontes depender do agente.
  */
 export const DELETION_NOTICE_QUEUE = "agent.notify";
+
+/** Uma fila por canal: o aviso só é consumido pelo processo que tem aquele canal (API ou WhatsApp). */
+export const noticeQueueFor = (base: string, provider: string): string => `${base}.${provider}`;

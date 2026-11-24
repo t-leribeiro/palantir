@@ -31,6 +31,7 @@ let store: S3ObjectStore;
 let deletions: DeletionStore;
 let owner: { userId: string; spaceId: string };
 let seq = 0;
+const NOTICE_QUEUE = `${AGENT_NOTIFY_QUEUE}.fake`;
 
 const SHA = (n: number) => String(n).padStart(64, "0");
 
@@ -38,7 +39,7 @@ beforeAll(async () => {
   [db, s3] = await Promise.all([startTestDatabase(), startTestObjectStorage()]);
   queue = createJobQueue(db.url, [
     { name: SOURCE_DELETE_QUEUE, retryLimit: 12, retryDelaySeconds: 30, expireInSeconds: 900 },
-    { name: AGENT_NOTIFY_QUEUE, retryLimit: 5, retryDelaySeconds: 10, expireInSeconds: 120 },
+    { name: NOTICE_QUEUE, retryLimit: 5, retryDelaySeconds: 10, expireInSeconds: 120 },
   ]);
   await queue.start();
   await seedOperator(db.pool);
@@ -155,11 +156,11 @@ describe("exclusão de fonte em duas etapas (feature 006)", () => {
     expect(row.completed_at).not.toBeNull();
     const audit = one((await db.pool.query<{ details: Record<string, number> }>("SELECT details FROM audit_events WHERE action = 'source.deleted' AND target_id = $1", [source.sourceId])).rows);
     expect(audit.details).toEqual({ messages: 3, audios: 1, objects: 2 });
-    expect(await jobs(AGENT_NOTIFY_QUEUE, result.deletionId)).toBe(1);
+    expect(await jobs(NOTICE_QUEUE, result.deletionId)).toBe(1);
 
     // Reentrega do job: nada a fazer, nenhum aviso a mais.
     expect(await execute({ deletionId: result.deletionId, sourceId: source.sourceId, spaceId: owner.spaceId })).toBe("already_completed");
-    expect(await jobs(AGENT_NOTIFY_QUEUE, result.deletionId)).toBe(1);
+    expect(await jobs(NOTICE_QUEUE, result.deletionId)).toBe(1);
     // Fonte nova com o mesmo nome depois da exclusão.
     expect((await ensureSource("Projeto Apagável")).created).toBe(true);
   });

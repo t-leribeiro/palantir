@@ -41,6 +41,7 @@
     "import": "node --env-file-if-exists=.env --import tsx src/main/import.ts",
     "whatsapp:link": "node --env-file-if-exists=.env --import tsx src/main/whatsapp-link.ts",
     "whatsapp:grupos": "node --env-file-if-exists=.env --import tsx src/main/whatsapp-groups.ts",
+    "auditoria": "node --env-file-if-exists=.env --import tsx src/main/audit.ts",
     "dev:whatsapp": "node --env-file-if-exists=.env --import tsx src/main/whatsapp.ts"
   },
   "devDependencies": {

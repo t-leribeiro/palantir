@@ -72,3 +72,8 @@
 | `palantir_agent_notifications_total` | counter | `kind`, `outcome` = `sent`, `failed`, `duplicate` |
 
 Alerta `SourceDeletionStalled`: `palantir_source_deletion_oldest_seconds > 1800` por 5 min.
+
+> Execução (2026-11-24):
+> - O aviso vai para uma fila por canal, `agent.notify.<canal>` (`agent.notify.whatsapp`, `agent.notify.fake`). Com a API e o WhatsApp no ar ao mesmo tempo, uma fila só deixaria o aviso cair no processo sem o canal certo.
+> - As métricas seguem o padrão do projeto, sem o prefixo `palantir_`: `agent_commands_total{command}`, `source_deletions_in_progress`, `source_deletion_oldest_seconds`, `source_deletion_seconds` e `source_deletion_items_total{kind}`, além de `agent_notifications_total{outcome}`. O contador de comandos não tem o rótulo de resultado.
+> - A purga apaga um objeto por vez (`DeleteObject`). O `DeleteObjects` em lote exige um checksum que o SeaweedFS não confere.
