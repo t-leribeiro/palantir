@@ -55,7 +55,7 @@ Um motor com outra API (por exemplo, o whisper.cpp `/inference`) vira um novo ar
 | `PALANTIR_TRANSCRIPTION` | `on` | `off` = o worker não assina `media.process` |
 | `PALANTIR_TRANSCRIBER` | `openai-compatible` | `openai-compatible` ou `fake` |
 | `PALANTIR_TRANSCRIBER_URL` | `http://127.0.0.1:8090` | Fora de loopback exige `ALLOW_REMOTE` |
-| `PALANTIR_TRANSCRIBER_MODEL` | `Systran/faster-whisper-small` até a medição | Preservado pelo setup |
+| `PALANTIR_TRANSCRIBER_MODEL` | `deepdml/faster-whisper-large-v3-turbo-ct2` (escolhido na medição de 2026-11-24, ADR-0010) | Preservado pelo setup |
 | `PALANTIR_TRANSCRIBER_ALLOW_REMOTE` | `false` | `true` registra aviso na partida: "transcrição remota ligada: o áudio sai desta máquina" |
 | `PALANTIR_TRANSCRIBER_API_KEY` | vazio | Só para remoto; nunca logado |
 | `PALANTIR_TRANSCRIBE_CONCURRENCY` | `1` | 1 a 4 |

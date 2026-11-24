@@ -61,7 +61,7 @@ Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`
 | `npm run whatsapp:link -- "<número>"` | Cadastra o número pessoal na conta WhatsApp do dono (sem código nesta fatia) |
 | `npm run dev:whatsapp` | Processo do número do agente; desligado por padrão (`PALANTIR_WHATSAPP_ENABLED`); captura de grupos com `PALANTIR_WHATSAPP_CAPTURE` (`off`, `agent`, `dedicated`) |
 | `npm run whatsapp:grupos -- [listar \| autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>"] \| revogar <grupo>]` | Lista, autoriza (com consentimento) e revoga a captura de grupos; lê só do banco |
-| `npm run transcricao:modelos -- <id> [<id>...]` | Baixa modelos no motor de transcrição local (ex.: `Systran/faster-whisper-small`) |
+| `npm run transcricao:modelos -- <id> [<id>...]` | Baixa modelos no motor de transcrição local (ex.: `deepdml/faster-whisper-large-v3-turbo-ct2`) |
 | `npm run eval:transcricao -- <preparar <export.zip> \| fleurs \| medir --modelos <ids>>` | Mede os modelos (WER, tempo real, memória) em `exports/medicao/`; a saída só tem números |
 | `npm run media:conferir` | Confere que os áudios guardados estão cifrados e decifram com a chave do `.env` |
 | `npm run eval` | Conjunto de avaliação (`eval/cases.json`): acertos, citações, "não encontrei" |

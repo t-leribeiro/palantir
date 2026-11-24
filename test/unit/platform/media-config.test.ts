@@ -25,7 +25,7 @@ describe("configuração da mídia e da transcrição", () => {
       enabled: true,
       engine: "openai-compatible",
       url: "http://127.0.0.1:8090",
-      model: "Systran/faster-whisper-small",
+      model: "deepdml/faster-whisper-large-v3-turbo-ct2",
       allowRemote: false,
       apiKey: undefined,
       concurrency: 1,

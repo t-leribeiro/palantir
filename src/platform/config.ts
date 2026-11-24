@@ -123,7 +123,7 @@ function transcriptionConfig(env: Env, problems: string[]): TranscriptionConfig 
     enabled: oneOf(env.PALANTIR_TRANSCRIPTION || "on", ["on", "off"] as const, "PALANTIR_TRANSCRIPTION", problems) === "on",
     engine: oneOf(env.PALANTIR_TRANSCRIBER || "openai-compatible", TRANSCRIBER_ENGINES, "PALANTIR_TRANSCRIBER", problems),
     url: transcriberUrl(env.PALANTIR_TRANSCRIBER_URL || "http://127.0.0.1:8090", allowRemote, problems),
-    model: env.PALANTIR_TRANSCRIBER_MODEL || "Systran/faster-whisper-small",
+    model: env.PALANTIR_TRANSCRIBER_MODEL || "deepdml/faster-whisper-large-v3-turbo-ct2",
     allowRemote,
     apiKey: env.PALANTIR_TRANSCRIBER_API_KEY || undefined,
     concurrency: integer(env.PALANTIR_TRANSCRIBE_CONCURRENCY ?? "1", "PALANTIR_TRANSCRIBE_CONCURRENCY", 1, 4, problems),

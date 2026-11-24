@@ -1,6 +1,6 @@
 # ADR-0010: Transcrição local e substituível, com mídia cifrada endereçada pelo conteúdo
 
-- Status: aceito (o modelo padrão é confirmado pela medição, seção "Medição")
+- Status: aceito (modelo padrão escolhido na medição de 2026-11-24, seção "Medição")
 - Data: 2026-11-23
 - Decisores: Leandro (produto), reversa-plan
 - Origem: `_reversa_forward/005-perguntar-sobre-audios/roadmap.md` (D-02 a D-13, D-19, D-21) e esclarecimento de 2026-11-23
@@ -45,13 +45,24 @@ O comando `npm run eval:transcricao` mede os candidatos em dois conjuntos:
 - 15 a 20 áudios reais do T3, transcritos à mão pelo usuário, só em `exports/medicao/`;
 - 50 frases do FLEURS pt-BR (CC BY 4.0).
 
-Os candidatos são `Systran/faster-whisper-small`, `Systran/faster-whisper-medium` e `deepdml/faster-whisper-large-v3-turbo-ct2`, em CPU. O padrão é o mais preciso com WER ≤ 20% e fator de tempo real ≤ 0,5.
+Os candidatos são `Systran/faster-whisper-small`, `Systran/faster-whisper-medium` e `deepdml/faster-whisper-large-v3-turbo-ct2`, em CPU. A meta era o mais preciso com WER ≤ 20% e fator de tempo real ≤ 0,5.
 
-| Modelo | Conjunto | Áudios | WER | Tempo real | Memória |
-|--------|----------|--------|-----|------------|---------|
-| (a preencher com a tabela do `medir` na demonstração) | | | | | |
+Medição de 2026-11-24, no notebook do usuário (Intel Core Ultra 7 165U, sem GPU; container com 4 GB), um modelo por vez:
 
-Até a medição, o padrão é o `small`. No spike, ele transcreveu 16 s de fala sintética em 4,5 s (tempo real ≈ 0,28), o que serve só como sinal.
+| Modelo | Conjunto | Áudios | Duração | WER | Tempo real | Memória |
+|--------|----------|--------|---------|-----|------------|---------|
+| `Systran/faster-whisper-small` | real | 20 | 21:00 | 12,7%¹ | 0,73 | 1,1 GB |
+| `deepdml/faster-whisper-large-v3-turbo-ct2` | real | 20 | 21:00 | 0,2%¹ | 1,38 | 2,6 GB |
+| `Systran/faster-whisper-small` | FLEURS | 50 | 10:46 | 8,1% | 1,07 | 1,0 GB |
+| `Systran/faster-whisper-medium` | FLEURS | 50 | 10:46 | 4,5% | ² | ² |
+| `deepdml/faster-whisper-large-v3-turbo-ct2` | FLEURS | 50 | 10:46 | 3,5% | 2,08 | 2,5 GB |
+
+1. As referências dos áudios reais são rascunhos do turbo, quase sem correção (19 de 20 iguais). A WER dos reais mede a distância até o turbo, não a precisão; a precisão comparável é a do FLEURS. O `medir` passou a avisar quando isso acontece.
+2. O `medium` só entrou na primeira rodada, com os modelos acumulados na memória do container, o que distorceu tempo e memória. A WER não depende disso. Ele ficou de fora da segunda rodada porque o turbo foi mais preciso.
+
+Nenhum candidato cumpriu as duas metas: na CPU desta máquina, nem o `small` transcreve no dobro da velocidade da fala. O tempo real é maior no FLEURS porque as frases são curtas (10 a 15 s) e cada pedido tem um custo fixo.
+
+**Decisão do usuário: `deepdml/faster-whisper-large-v3-turbo-ct2`.** Ele erra menos da metade do `small` no FLEURS. Em troca, é cerca de 2× mais lento: 1 min de áudio leva perto de 1 min 25 s, e a primeira importação dos 158 áudios do T3 leva umas 4 h, uma vez só. O áudio ao vivo passa na frente da fila. O prazo do pedido ao motor (3× a duração do áudio, no mínimo 10 min) cobre esse ritmo com a concorrência padrão de 1.
 
 ## Consequências
 
@@ -77,7 +88,8 @@ Até a medição, o padrão é o `small`. No spike, ele transcreveu 16 s de fala
 
 ## Quando revisar
 
-- Depois da medição: preencher a tabela e fixar `PALANTIR_TRANSCRIBER_MODEL` no `.env.example`.
+- Se a demora do áudio ao vivo incomodar no uso: voltar ao `small` é só trocar `PALANTIR_TRANSCRIBER_MODEL`.
+- Se as referências dos áudios reais forem corrigidas ouvindo os áudios: medir de novo para ter a WER real dos dois modelos.
 - Quando houver GPU disponível, ou um modelo menor com WER melhor: medir de novo pelo mesmo comando.
 - Antes de ligar um motor remoto: registrar aqui o fornecedor, o custo e a base legal para mandar áudio de terceiros.
 - Quando imagem ou documento passar a ser processado: um processador novo e uma atualização nesta ADR.
