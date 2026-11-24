@@ -1,7 +1,8 @@
 import type { AgentReply, CanonicalMessage } from "../../../contracts/channel/knowledge-channel.js";
 import type { Evidence } from "../../retrieval/index.js";
-import { composeAnswer, noEvidenceReply, notLinkedReply, validateCitations } from "../domain/answer.js";
+import { composeAnswer, noAudioEvidenceReply, noEvidenceReply, notLinkedReply, validateCitations } from "../domain/answer.js";
 import { helpReply, isHelpRequest, isTextual, textOnlyReply } from "../domain/help.js";
+import { questionScope } from "../domain/question.js";
 
 /** Porta de geração de resposta (ADR-0007). A feature do agente adiciona uma implementação com LLM. */
 export interface AnswerGenerator {
@@ -13,7 +14,7 @@ export interface IdentityResolver {
 }
 
 export interface EvidenceSearch {
-  search(request: { spaceId: string; query: string }): Promise<{ results: readonly Evidence[]; lowConfidence: boolean }>;
+  search(request: { spaceId: string; query: string; kind?: "audio" }): Promise<{ results: readonly Evidence[]; lowConfidence: boolean }>;
 }
 
 /**
@@ -45,10 +46,18 @@ export function createAskQuestion(deps: AskQuestionDeps): AskQuestion {
     const question = message.text?.trim() ?? "";
     if (question === "") return noEvidenceReply();
     if (isHelpRequest(question)) return helpReply();
-    const { results, lowConfidence } = await deps.search.search({ spaceId: user.spaceId, query: question });
-    if (lowConfidence || results.length === 0) return noEvidenceReply();
+    const results = await searchInScope(deps.search, user.spaceId, question);
+    if ("outcome" in results) return results;
     return answerWithValidCitations(deps.generator, question, results);
   };
+}
+
+/** Busca no escopo da pergunta (E001: "em qual áudio..." só entre áudios); sem evidência, já devolve a resposta. */
+async function searchInScope(search: EvidenceSearch, spaceId: string, question: string): Promise<readonly Evidence[] | AgentReply> {
+  const scope = questionScope(question);
+  const { results, lowConfidence } = await search.search({ spaceId, query: scope.query, ...(scope.onlyAudio ? { kind: "audio" as const } : {}) });
+  if (lowConfidence || results.length === 0) return scope.onlyAudio ? noAudioEvidenceReply() : noEvidenceReply();
+  return results;
 }
 
 const MAX_ATTEMPTS = 2;

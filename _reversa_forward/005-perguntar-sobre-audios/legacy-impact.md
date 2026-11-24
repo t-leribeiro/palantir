@@ -27,6 +27,7 @@
 | `.dependency-cruiser.cjs`, `test/architecture/**` | platform-foundation | regra-nova | LOW | Regras `object-store-isolated` e `transcriber-engine-isolated`, com fixtures |
 | `test/**` (unit, integration, contract, e2e, support) | platform-foundation | componente-novo | LOW | TDD da fatia, com áudio Ogg sintético (`test/support/audio.ts`) e SeaweedFS em container (`test/support/object-storage.ts`) |
 | `docs/adr/0010-*.md` (novo), `docs/adr/0004-*.md`, `docs/adr/README.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/plano-de-fatias.md` | platform-foundation | componente-novo | LOW | Decisão da transcrição e da mídia, contrato 1.3.0, comandos e status |
+| `src/modules/agent/domain/question.ts` (novo), `src/modules/agent/application/ask-question.ts`, `src/modules/agent/domain/answer.ts`, `src/modules/retrieval/application/search-evidence.ts`, `src/modules/retrieval/infrastructure/pg-search-index.ts` | conversational-agent, retrieval | regra-alterada | LOW | Emenda E001 (2026-11-24): pergunta com "áudio" busca só mensagens de áudio (filtro `kind` nas portas internas de busca, sem mudar banco nem contrato) e não usa a palavra como termo; sem áudio, responde "Não encontrei áudio sobre isso." |
 
 Arquivos pré-existentes modificados: os das features 001 a 004 listados acima. Nenhum arquivo anterior ao pipeline foi alterado.
 

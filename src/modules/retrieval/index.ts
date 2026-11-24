@@ -5,6 +5,7 @@ export {
   createSearchEvidence,
   type SearchEvidence,
   type SearchIndex,
+  type SearchKind,
   type SearchRequest,
   type SearchResponse,
 } from "./application/search-evidence.js";

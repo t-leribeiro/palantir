@@ -52,11 +52,11 @@ function ev(messageId: string, score: number): Evidence {
 
 describe("retrieval: buscar evidências", () => {
   function search(results: Evidence[], threshold = 0.05) {
-    const calls: [string, string, number][] = [];
+    const calls: [string, string, number, ...string[]][] = [];
     const run = createSearchEvidence({
       index: {
-        search: async (spaceId, query, limit) => {
-          calls.push([spaceId, query, limit]);
+        search: async (spaceId, query, limit, kind) => {
+          calls.push(kind ? [spaceId, query, limit, kind] : [spaceId, query, limit]);
           return results;
         },
       },
@@ -83,6 +83,12 @@ describe("retrieval: buscar evidências", () => {
       ["s1", "alloy", MAX_LIMIT],
       ["s1", "alloy", 10],
     ]);
+  });
+
+  it("E001: repassa o tipo pedido ao índice", async () => {
+    const { run, calls } = search([ev("m1", 1)]);
+    await run({ spaceId: "s1", query: "temporal", kind: "audio" });
+    expect(calls).toEqual([["s1", "temporal", 10, "audio"]]);
   });
 
   it("sinaliza baixa confiança abaixo do limiar e confiança no limiar", async () => {

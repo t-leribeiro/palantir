@@ -11,6 +11,10 @@ const TIME_ZONE = "America/Sao_Paulo";
 
 export const noEvidenceReply = (): AgentReply => ({ text: NO_EVIDENCE_TEXT, outcome: "no_evidence", citations: [] });
 
+/** Pergunta que pede um áudio sem nenhum áudio sobre o assunto (feature 005, emenda E001). */
+export const NO_AUDIO_EVIDENCE_TEXT = "Não encontrei áudio sobre isso.";
+export const noAudioEvidenceReply = (): AgentReply => ({ text: NO_AUDIO_EVIDENCE_TEXT, outcome: "no_evidence", citations: [] });
+
 export const notLinkedReply = (): AgentReply => ({ text: NOT_LINKED_TEXT, outcome: "no_evidence", citations: [] });
 
 /** RN-04: toda citação aponta para uma mensagem que veio da busca; "answered" exige citação. */

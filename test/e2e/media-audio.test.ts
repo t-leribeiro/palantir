@@ -158,7 +158,7 @@ describe("S4: perguntar sobre o que foi dito em áudios", () => {
     const reply = await askUntil("em qual áudio falaram do Pyroscope?", "Pyroscope");
     expect(reply).toContain("Ana Souza em T3");
     expect(reply).toContain("áudio de 0:30, aos 0:00");
-    expect(await ask("em qual áudio falaram de Kubernetes?")).toContain("Não encontrei evidências suficientes.");
+    expect(await ask("em qual áudio falaram de Kubernetes?")).toContain("Não encontrei áudio sobre isso.");
   });
 
   it("RN-04, RF-05: o mesmo áudio pela captura e pela importação fica uma vez só", async () => {
@@ -189,7 +189,7 @@ describe("S4: perguntar sobre o que foi dito em áudios", () => {
     expect(await importFile(file, "T3")).toMatchObject({ audiosQueued: 1 });
     await new Promise((r) => setTimeout(r, 1500));
     expect((await attachmentStatuses()).pending).toBe(1);
-    expect(await ask("em qual áudio falaram do Terraform?")).toContain("Não encontrei evidências suficientes.");
+    expect(await ask("em qual áudio falaram do Terraform?")).toContain("Não encontrei áudio sobre isso.");
 
     await worker.close();
     await db.pool.query("DELETE FROM pgboss.job WHERE name = 'media.process'"); // job expirado enquanto desligado
