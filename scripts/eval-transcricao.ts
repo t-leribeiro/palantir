@@ -138,6 +138,12 @@ function sampleMemory(): number | undefined {
   return r.status === 0 ? parseDockerMemory(r.stdout) : undefined;
 }
 
+/** Progresso numa linha só (contagem, nunca texto): no terminal, reescreve a linha; fora dele, cala. */
+function progress(line: string, done = false): void {
+  if (!process.stdout.isTTY) return;
+  process.stdout.write(`\r${line.padEnd(80)}${done ? "\r" : ""}`);
+}
+
 const mimeOf = (file: string) => (file.endsWith(".wav") ? "audio/wav" : "audio/ogg");
 const IDLE_POLL_MS = 15_000;
 const IDLE_MAX_MS = 15 * 60_000;
@@ -187,9 +193,11 @@ async function measure(model: string, set: MeasureResult["set"], pairs: readonly
       elapsed += (performance.now() - started) / 1000;
       audioSeconds += result.durationSeconds ?? 0;
       counts.push(werCount(pair.reference, result.text));
+      progress(`${model} · ${set}: ${counts.length}/${pairs.length}`);
     }
   } finally {
     clearInterval(timer);
+    progress("", true);
   }
   return { model, set, audios: pairs.length, seconds: audioSeconds, wer: aggregateWer(counts), rtf: audioSeconds > 0 ? elapsed / audioSeconds : 0, peakMemoryBytes: peak };
 }
@@ -211,6 +219,7 @@ async function medir(args: string[]): Promise<void> {
   // limite de memória do container e caem na swap, o que distorce tempo e memória (medição de 2026-11-24).
   for (const model of values.modelos.split(",").map((m) => m.trim())) {
     await waitEngineIdle(url);
+    console.log(`Medindo ${model} (o primeiro áudio de cada conjunto aquece o modelo, fora do cronômetro)...`);
     for (const { set, pairs } of bySet) results.push(await measure(model, set, pairs, url));
   }
   if (results.length === 0) throw new Error("Nenhum par áudio + transcrição encontrado. Rode preparar e/ou fleurs antes.");
