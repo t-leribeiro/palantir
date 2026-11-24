@@ -2,12 +2,15 @@ export type { Evidence } from "../retrieval/index.js";
 export {
   MAX_CITATIONS,
   NOT_LINKED_TEXT,
+  NO_AUDIO_EVIDENCE_TEXT,
   NO_EVIDENCE_TEXT,
   composeAnswer,
+  noAudioEvidenceReply,
   noEvidenceReply,
   notLinkedReply,
   validateCitations,
 } from "./domain/answer.js";
+export { questionScope, type QuestionScope } from "./domain/question.js";
 export { HELP_TEXT, TEXT_ONLY_TEXT, helpReply, isHelpRequest, textOnlyReply } from "./domain/help.js";
 export {
   createAskQuestion,

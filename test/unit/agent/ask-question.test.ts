@@ -1,9 +1,11 @@
 // T026: RN-04, RN-05, RF-13 e RF-14 (resposta só com evidências, citações validadas).
 import { describe, expect, it } from "vitest";
 import {
+  NO_AUDIO_EVIDENCE_TEXT,
   NO_EVIDENCE_TEXT,
   createAskQuestion,
   createDeterministicAnswerGenerator,
+  questionScope,
   validateCitations,
   type AnswerGenerator,
   type Evidence,
@@ -82,6 +84,18 @@ describe("agente: perguntar", () => {
     expect(searches).toEqual([{ spaceId: "space-1", query: "quem falou do Grafana Alloy?" }]);
   });
 
+  it("E001: pergunta sobre áudio busca só áudios, sem a palavra 'áudio' nos termos", async () => {
+    const { ask, searches } = setup();
+    await ask({ ...question, text: "em qual áudio falaram de Apenas um teste?" });
+    expect(searches).toEqual([{ spaceId: "space-1", query: "em qual falaram de Apenas um teste?", kind: "audio" }]);
+  });
+
+  it("E001: sem áudio sobre o assunto, avisa que não achou áudio", async () => {
+    const { ask } = setup({ results: [] });
+    expect(await ask({ ...question, text: "algum áudio sobre o orçamento?" })).toEqual({ text: NO_AUDIO_EVIDENCE_TEXT, outcome: "no_evidence", citations: [] });
+    expect((await setup({ lowConfidence: true }).ask({ ...question, text: "em qual audio falaram de X" })).text).toBe(NO_AUDIO_EVIDENCE_TEXT);
+  });
+
   it("cita no máximo 3 evidências, na ordem da busca", async () => {
     const { ask } = setup({ results: [evidence(1), evidence(2), evidence(3), evidence(4)] });
     const reply = await ask(question);
@@ -132,6 +146,19 @@ describe("agente: perguntar", () => {
       },
     };
     expect((await setup({ generator: liar }).ask(question)).outcome).toBe("no_evidence");
+  });
+});
+
+describe("questionScope (E001)", () => {
+  it("reconhece áudio e áudios, com ou sem acento e em qualquer caixa", () => {
+    expect(questionScope("em qual Áudio falaram de X?")).toEqual({ query: "em qual falaram de X?", onlyAudio: true });
+    expect(questionScope("tem audios sobre X")).toEqual({ query: "tem sobre X", onlyAudio: true });
+    expect(questionScope("áudio")).toEqual({ query: "", onlyAudio: true });
+  });
+
+  it("não confunde palavras que só contêm 'áudio' nem mexe em pergunta comum", () => {
+    expect(questionScope("audiovisual e audiência")).toEqual({ query: "audiovisual e audiência", onlyAudio: false });
+    expect(questionScope("  quem   falou do Alloy? ")).toEqual({ query: "quem falou do Alloy?", onlyAudio: false });
   });
 });
 

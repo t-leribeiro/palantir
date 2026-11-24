@@ -179,6 +179,24 @@ describe("caminho de mídia (feature 005)", () => {
     await createIndexMessage(createPgChunkRepository(db.pool))({ messageId: outcome.messageId, spaceId });
     const found = await createPgSearchIndex(db.pool).search(spaceId, "quem falou do Temporal?", 5);
     expect(found[0]).toMatchObject({ messageId: outcome.messageId, kind: "audio", audioStartS: 0, audioEndS: 11, durationSeconds: 11 });
+
+    // E001: com o filtro de áudio, uma mensagem de texto sobre o mesmo assunto fica de fora.
+    seq += 1;
+    const text = await ingest()(
+      canonicalMessage({
+        id: newId(),
+        source: { provider: "whatsapp", accountId, conversationId, externalMessageId: `LIVE-T-${seq}` },
+        timestamp: at(500),
+        kind: "text",
+        text: "o Temporal orquestra fluxos com retentativas",
+        provenance: { captureMethod: "live", capturedAt: at(501), adapter: "whatsapp" },
+      }),
+    );
+    if (text.outcome !== "accepted") throw new Error(text.outcome);
+    await createIndexMessage(createPgChunkRepository(db.pool))({ messageId: text.messageId, spaceId });
+    const index = createPgSearchIndex(db.pool);
+    expect((await index.search(spaceId, "Temporal", 5)).map((e) => e.kind).sort()).toEqual(["audio", "text"]);
+    expect((await index.search(spaceId, "Temporal", 5, "audio")).map((e) => e.messageId)).toEqual([outcome.messageId]);
   });
 
   it("RF-04 e RF-05: o mesmo áudio pela captura e pela importação dá 1 objeto e 1 mensagem reconciliada", async () => {

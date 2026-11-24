@@ -228,3 +228,11 @@ Cenário: Medição dos modelos sem expor conteúdo
 |------|-----------|-------|
 | 2026-11-23 | Versão inicial gerada por `/reversa-requirements` | reversa |
 | 2026-11-23 | `/reversa-clarify`: 3 dúvidas resolvidas (forma da resposta, escopo do armazenamento, conjunto de medição), motor de transcrição substituível (inclusive SaaS) e nova RF-15 (anexos genéricos) | reversa |
+
+## Emendas
+
+### E001, 2026-11-24
+
+O que muda: quando a pergunta fala em "áudio" ou "áudios" ("em qual áudio falaram de X?"), o agente busca só entre mensagens de áudio e não usa a palavra "áudio" como termo de busca; sem áudio sobre o assunto, responde "Não encontrei áudio sobre isso." em vez de citar mensagens de texto.
+Motivo: na demonstração de 2026-11-24, "em qual áudio falaram de Apenas um teste?" trouxe o áudio certo em 2º lugar, atrás de uma mensagem de texto, e trouxe uma terceira mensagem só porque o texto dela dizia "áudio".
+Arquivos previstos: `src/modules/agent/domain/answer.ts`, `src/modules/agent/application/ask-question.ts`, `src/modules/retrieval/application/search-evidence.ts`, `src/modules/retrieval/infrastructure/pg-search-index.ts`, testes unitários e de integração da busca.

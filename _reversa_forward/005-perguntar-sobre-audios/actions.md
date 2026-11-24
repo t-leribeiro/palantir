@@ -82,3 +82,9 @@ Todo o resto continua na S4a, sem mudar IDs.
 | Data | Alteração | Autor |
 |------|-----------|-------|
 | 2026-11-23 | Versão inicial gerada por `/reversa-to-do` | reversa |
+
+## Emendas
+
+| ID | Descrição | Dependências | Paralelismo | Arquivo alvo | Confidência | Status |
+|----|-----------|--------------|-------------|--------------|-------------|--------|
+| E001 | "Em qual áudio..." busca só entre áudios, sem usar "áudio" como termo; sem áudio, avisa | - | - | `src/modules/agent/domain/question.ts` | 🟢 | `[X]` |
