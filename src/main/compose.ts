@@ -15,6 +15,7 @@ import { createAskQuestion, createDeterministicAnswerGenerator, createPgInboundR
 import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../modules/identity/index.js";
 import { INDEX_QUEUE, createIngestMessage, createPgUnitOfWork } from "../modules/ingestion/index.js";
 import { createIndexMessage, createPgChunkRepository, type IndexRequest } from "../modules/knowledge/index.js";
+import { createOtelMediaObserver } from "../modules/media/index.js";
 import { createPgSearchIndex, createSearchEvidence } from "../modules/retrieval/index.js";
 import {
   createIsSourceAuthorized,
@@ -31,14 +32,18 @@ import { createLogger, type Logger } from "../platform/logging/logger.js";
 import { createJobQueue, type JobQueue, type QueueDefinition } from "../platform/queue/index.js";
 import { createOtelMetrics, seconds, withSpan, type AppMetrics } from "../platform/telemetry/index.js";
 import { newId } from "../shared/index.js";
+import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, withMediaPreparation } from "./media.js";
 
 export const QUEUES: readonly QueueDefinition[] = [
   { name: INDEX_QUEUE, retryLimit: 5, retryDelaySeconds: 2, expireInSeconds: 60, deadLetter: `${INDEX_QUEUE}.dead` },
+  MEDIA_QUEUE_DEFINITION,
 ];
 
 export interface CompositionOptions {
   readonly logger?: Logger;
   readonly metrics?: AppMetrics;
+  /** Ganchos do worker de mídia (feature 005): observador de métricas e saúde do motor. */
+  readonly media?: Parameters<typeof startMediaWorker>[4];
 }
 
 interface Infra {
@@ -114,7 +119,7 @@ export async function buildApi(config: AppConfig, options: CompositionOptions = 
 export function buildIngest(pool: Pool, queue: JobQueue) {
   return createIngestMessage({
     sources: { check: createIsSourceAuthorized(createPgSourceRepository(pool)) },
-    unitOfWork: createPgUnitOfWork(pool, queue),
+    unitOfWork: createPgUnitOfWork(pool, queue, MEDIA_JOBS),
     ids: newId,
   });
 }
@@ -150,9 +155,11 @@ export async function startWorker(config: AppConfig, options: CompositionOptions
       }
     }),
   );
+  const media = await startMediaWorker(config, pool, queue, logger, options.media ?? { observer: createOtelMediaObserver() });
   logger.info({ queue: INDEX_QUEUE }, "worker pronto");
   return {
     async close() {
+      media.stop();
       await queue.stop();
       await pool.end();
     },
@@ -199,31 +206,37 @@ function captureState(mode: CaptureMode, agent: WhatsAppChannel, capture: WhatsA
 interface CaptureWiring {
   readonly ports: CapturePorts | undefined;
   readonly queue: JobQueue | undefined;
-  readonly ingest: InboundHandler | undefined;
+  /** Entrada da captura para um canal: com mídia, prepara os anexos pelo `fetchMedia` dele (feature 005). */
+  readonly ingestFor: ((channel: WhatsAppChannel) => InboundHandler) | undefined;
+  readonly mediaKinds: readonly "audio"[];
 }
 
 async function wireCapture(config: AppConfig, pool: Pool, metrics: AppMetrics, logger: Logger): Promise<CaptureWiring> {
-  if (config.whatsapp.capture === "off") return { ports: undefined, queue: undefined, ingest: undefined };
+  if (config.whatsapp.capture === "off") return { ports: undefined, queue: undefined, ingestFor: undefined, mediaKinds: [] };
   const queue = createJobQueue(config.databaseUrl, QUEUES);
   await queue.start();
   const ingest = buildIngest(pool, queue);
+  const recorded: InboundHandler = (message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger)));
+  const prepare = await withMediaPreparation(config, pool, logger, createOtelMediaObserver());
   return {
     ports: buildCapturePorts(pool),
     queue,
-    ingest: (message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))),
+    ingestFor: (channel) => (prepare ? prepare(recorded, channel) : recorded),
+    mediaKinds: prepare ? captureMediaKinds(config.media) : [],
   };
 }
 
 function buildCaptureChannel(options: WhatsAppCompositionOptions, wiring: CaptureWiring, receipts: InboundReceiptsPort, log: ObserverLog): WhatsAppChannel {
-  if (!options.captureProvider || !wiring.ports || !wiring.ingest) throw new Error(DEDICATED_WITHOUT_PROVIDER);
+  if (!options.captureProvider || !wiring.ports || !wiring.ingestFor) throw new Error(DEDICATED_WITHOUT_PROVIDER);
   const channel = createWhatsAppChannel({
     provider: options.captureProvider,
     receipts,
     observer: options.captureObserver ?? createOtelWhatsAppObserver(undefined, log, "capture"),
     roles: { answer: false, capture: true },
     capturePorts: wiring.ports,
+    captureMediaKinds: wiring.mediaKinds,
   });
-  channel.onMessage(wiring.ingest);
+  channel.onMessage(wiring.ingestFor(channel));
   return channel;
 }
 
@@ -235,9 +248,9 @@ function buildAgentChannel(options: WhatsAppCompositionOptions, mode: CaptureMod
     receipts,
     observer: options.observer ?? createOtelWhatsAppObserver(undefined, log, "agent"),
     roles: { answer: true, capture: captures },
-    ...(captures ? { capturePorts: wiring.ports } : {}),
+    ...(captures ? { capturePorts: wiring.ports, captureMediaKinds: wiring.mediaKinds } : {}),
   });
-  if (captures && wiring.ingest) channel.onMessage(wiring.ingest);
+  if (captures && wiring.ingestFor) channel.onMessage(wiring.ingestFor(channel));
   return channel;
 }
 

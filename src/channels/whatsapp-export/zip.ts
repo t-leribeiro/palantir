@@ -30,12 +30,37 @@ const DEFAULT_MAX_RATIO = 100;
 
 /** Linhas do .txt da conversa, lidas sob demanda. */
 export async function* readExportLines(file: string, options: ReadOptions = {}): AsyncGenerator<string> {
-  if (!existsSync(file)) throw new ExportFileError("not_found", `Arquivo não encontrado: ${file}`);
-  const stream = extname(file).toLowerCase() === ".zip" ? await openChatInZip(file, options) : createReadStream(file);
-  yield* createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
+  const archive = await openExportArchive(file, options);
+  try {
+    yield* archive.lines();
+  } finally {
+    archive.close();
+  }
 }
 
-async function openChatInZip(file: string, options: ReadOptions): Promise<Readable> {
+/** Export aberto: as linhas do .txt e, num ZIP, os arquivos de mídia pelo nome (feature 005, D-17). */
+export interface ExportArchive {
+  lines(): AsyncIterable<string>;
+  /** O arquivo de mídia está no export? (sempre falso para um .txt solto) */
+  has(fileName: string): boolean;
+  /** Nomes dos arquivos de mídia do export (vazio para um .txt solto). */
+  names(): string[];
+  /** Bytes do arquivo de mídia, em memória; nada é extraído para o disco. */
+  read(fileName: string): Promise<Uint8Array>;
+  close(): void;
+}
+
+export async function openExportArchive(file: string, options: ReadOptions = {}): Promise<ExportArchive> {
+  if (!existsSync(file)) throw new ExportFileError("not_found", `Arquivo não encontrado: ${file}`);
+  if (extname(file).toLowerCase() !== ".zip") {
+    return {
+      lines: () => createInterface({ input: createReadStream(file), crlfDelay: Number.POSITIVE_INFINITY }),
+      has: () => false,
+      names: () => [],
+      read: () => Promise.reject(new ExportFileError("not_found", "Export sem mídia.")),
+      close: () => undefined,
+    };
+  }
   const zip = await openZip(file);
   const entries = await listEntries(zip);
   assertSafe(entries, options);
@@ -44,9 +69,34 @@ async function openChatInZip(file: string, options: ReadOptions): Promise<Readab
     zip.close();
     throw new ExportFileError("no_chat_file", "O ZIP não contém o .txt da conversa exportada.");
   }
+  const byName = new Map(entries.filter((e) => e !== chat).map((e) => [baseName(e.fileName), e]));
+  return {
+    lines: async function* () {
+      yield* createInterface({ input: await openEntry(zip, chat), crlfDelay: Number.POSITIVE_INFINITY });
+    },
+    has: (name) => byName.has(name),
+    names: () => [...byName.keys()],
+    async read(name) {
+      const entry = byName.get(name);
+      if (!entry) throw new ExportFileError("not_found", "Mídia ausente no export.");
+      return readAll(await openEntry(zip, entry));
+    },
+    close: () => zip.close(),
+  };
+}
+
+const baseName = (path: string): string => path.split("/").pop() ?? path;
+
+function openEntry(zip: yauzl.ZipFile, entry: yauzl.Entry): Promise<Readable> {
   return new Promise((resolve, reject) => {
-    zip.openReadStream(chat, (error, stream) => (error ? reject(asInvalid(error)) : resolve(stream)));
+    zip.openReadStream(entry, (error, stream) => (error ? reject(asInvalid(error)) : resolve(stream)));
   });
+}
+
+async function readAll(stream: Readable): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  return new Uint8Array(Buffer.concat(chunks));
 }
 
 function openZip(file: string): Promise<yauzl.ZipFile> {

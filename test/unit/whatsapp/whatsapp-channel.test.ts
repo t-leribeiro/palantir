@@ -152,7 +152,7 @@ describe("createWhatsAppChannel", () => {
     provider.setState("logged_out", "401");
     expect(channel.state()).toBe("logged_out");
     expect(events).toContain("state:logged_out");
-    expect(channel.capabilities()).toMatchObject({ supportsLiveCapture: false, supportsMedia: false, maxMessageLength: 4000 });
+    expect(channel.capabilities()).toMatchObject({ supportsLiveCapture: false, supportsMedia: true, maxMessageLength: 4000 });
     expect(await channel.listConversations()).toEqual([]);
   });
 });

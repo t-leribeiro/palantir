@@ -49,10 +49,10 @@ npm run whatsapp:link -- "+55 11 9XXXX-XXXX"
 ## 3. Baixar os modelos candidatos
 
 ```bash
-npm run transcricao:modelos -- Systran/faster-whisper-small Systran/faster-whisper-medium <id do large-v3-turbo>
+npm run transcricao:modelos -- Systran/faster-whisper-small Systran/faster-whisper-medium deepdml/faster-whisper-large-v3-turbo-ct2
 ```
 
-O id do `large-v3-turbo` fica registrado nas notas de execução do `actions.md`, depois da verificação do motor.
+Os três ids foram confirmados no registro do Speaches (notas de execução do `actions.md`, T001). O `small` leva cerca de 30 s para baixar; o `medium` e o `turbo`, alguns minutos cada.
 
 ## 4. Medir e escolher o modelo
 
@@ -67,7 +67,7 @@ O id do `large-v3-turbo` fica registrado nas notas de execução do `actions.md`
    ```
 4. Meça:
    ```bash
-   npm run eval:transcricao -- medir --modelos Systran/faster-whisper-small,Systran/faster-whisper-medium,<id do turbo>
+   npm run eval:transcricao -- medir --modelos Systran/faster-whisper-small,Systran/faster-whisper-medium,deepdml/faster-whisper-large-v3-turbo-ct2
    ```
 5. A tabela mostra, por modelo e conjunto, o WER, o tempo real e a memória, e aponta o recomendado: o mais preciso com WER ≤ 20% e tempo real ≤ 0,5. Coloque o escolhido no `.env`: `PALANTIR_TRANSCRIBER_MODEL=<id>`.
 

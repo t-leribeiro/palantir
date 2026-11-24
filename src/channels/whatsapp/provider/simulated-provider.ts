@@ -1,5 +1,6 @@
 // Provedor WhatsApp simulado (feature 003, D-03): mesma porta do real, sem rede nem número. Usado pela
 // suíte de contrato, pelo E2E e pelos testes do adaptador.
+import { MediaUnavailableError } from "../../../contracts/channel/knowledge-channel.js";
 import { isGroupJid } from "./mapping.js";
 import type { GroupInfo, IncomingDirect, IncomingGroupMessage, SessionState, WhatsAppProvider } from "./provider.js";
 
@@ -21,6 +22,12 @@ export interface SimulatedProvider extends WhatsAppProvider {
   clearSent(): void;
   /** As próximas `count` chamadas de envio falham. */
   failNextSends(count: number): void;
+  /** Feature 005: entrega um áudio de grupo com o arquivo disponível para `downloadMedia`. */
+  deliverGroupAudio(message: Omit<IncomingGroupMessage, "kind" | "media">, audio: { bytes: Uint8Array; seconds?: number }): Promise<void>;
+  /** Os próximos `count` downloads falham (`download_failed`). */
+  failNextDownloads(count: number): void;
+  /** Referências cujo arquivo foi baixado, na ordem. */
+  downloads(): readonly string[];
   isStarted(): boolean;
 }
 
@@ -34,6 +41,9 @@ export function createSimulatedProvider(): SimulatedProvider {
   let groups: readonly GroupInfo[] = [];
   let started = false;
   let failures = 0;
+  const media = new Map<string, Uint8Array>();
+  const downloaded: string[] = [];
+  let downloadFailures = 0;
 
   const provider: SimulatedProvider = {
     async start() {
@@ -68,6 +78,26 @@ export function createSimulatedProvider(): SimulatedProvider {
       if (!onGroup) throw new Error("nenhum listener de mensagem de grupo registrado");
       await onGroup(message);
     },
+    async deliverGroupAudio(message, audio) {
+      const fetchRef = `sim-${message.id}`;
+      media.set(fetchRef, audio.bytes);
+      const seconds = audio.seconds === undefined ? {} : { seconds: audio.seconds };
+      await provider.deliverGroup({ ...message, kind: "audio", media: { mimeType: "audio/ogg; codecs=opus", sizeBytes: audio.bytes.length, fetchRef, ...seconds } });
+    },
+    async downloadMedia(fetchRef) {
+      const bytes = media.get(fetchRef);
+      if (!bytes) throw new MediaUnavailableError("expired");
+      if (downloadFailures > 0) {
+        downloadFailures -= 1;
+        throw new MediaUnavailableError("download_failed");
+      }
+      downloaded.push(fetchRef);
+      return bytes;
+    },
+    failNextDownloads(count) {
+      downloadFailures = count;
+    },
+    downloads: () => [...downloaded],
     setGroups(next, complete = true) {
       groups = complete ? [...next] : [...groups.filter((g) => !next.some((n) => n.groupId === g.groupId)), ...next];
       for (const listener of groupListeners) listener(next, complete);

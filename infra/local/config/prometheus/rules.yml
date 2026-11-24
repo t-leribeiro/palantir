@@ -18,3 +18,22 @@ groups:
         annotations:
           summary: O número ({{ $labels.role }}) está reconectando há mais de 5 minutos
           description: Verifique a internet do computador e o celular do chip.
+  - name: palantir-media
+    # Feature 005 (D-20): fila de transcrição parada e motor fora do ar. Aparecem no painel "Palantír / Mídia".
+    rules:
+      - alert: TranscriptionQueueStalled
+        expr: sum(media_queue_size{kind="audio"}) > 0 and sum(increase(media_processed_total{kind="audio"}[30m])) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: A fila de transcrição não diminui há 30 minutos
+          description: Há áudios esperando e nenhum foi processado. Confira se o worker está no ar (npm run dev:worker), se PALANTIR_TRANSCRIPTION=on e se o motor responde em http://127.0.0.1:8090/health.
+      - alert: TranscriberDown
+        expr: max(transcriber_up) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: O motor de transcrição não responde há 5 minutos
+          description: Os áudios ficam guardados e pendentes. Rode npm run setup para subir o container do motor de novo.

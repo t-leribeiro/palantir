@@ -18,8 +18,19 @@ export interface ParsedMessage {
   readonly text: string;
 }
 
+/** Anexo citado no .txt (feature 005, D-17): o nome do arquivo no ZIP, quando o export traz mídia. */
+export interface ParsedAttachment {
+  readonly local: LocalDateTime;
+  readonly author: string;
+  /** `undefined` em `<Mídia oculta>` (export sem mídia: o tipo é desconhecido). */
+  readonly fileName: string | undefined;
+  /** Teve legenda: a legenda já virou mensagem de texto (BUG-20261123-S57G). */
+  readonly captioned: boolean;
+}
+
 export interface ParseResult {
   readonly messages: readonly ParsedMessage[];
+  readonly attachments: readonly ParsedAttachment[];
   readonly systemCount: number;
   readonly mediaCount: number;
   readonly unrecognizedLines: number;
@@ -47,6 +58,9 @@ const ANDROID = new RegExp(String.raw`^${DATE}${TIME}\s-\s(.*)$`);
 const IOS = new RegExp(String.raw`^\[${DATE}${TIME}\]\s(.*)$`);
 const MARKS = /[\u200e\u200f\ufeff]/g;
 const MEDIA = /^<(m[íi]dia oculta|media omitted|anexado:|attached:)|\((arquivo anexado|file attached)\)$/i;
+/** Nome do arquivo: Android `PTT-...opus (arquivo anexado)`, iOS `<anexado: 00000012-AUDIO-....opus>`. */
+const ANDROID_ATTACHMENT = /^(.+?)\s\((?:arquivo anexado|file attached)\)$/i;
+const IOS_ATTACHMENT = /^<(?:anexado|attached):\s*(.+?)\s*>$/i;
 const DELETED = /^(esta mensagem foi apagada|mensagem apagada|voc[êe] apagou esta mensagem|this message was deleted|you deleted this message)$/i;
 /** Marcador que o próprio app acrescenta ao fim de mensagens editadas: não é texto do autor. */
 const EDITED = /\s*<(mensagem editada|this message was edited)>$/i;
@@ -67,6 +81,7 @@ interface RawEntry {
   readonly twelveHour: boolean;
   readonly kind: Kind;
   readonly author: string;
+  readonly attachment: string | undefined;
   text: string;
 }
 
@@ -94,6 +109,7 @@ export function parseExport(lines: Iterable<string>, options: { dateOrder?: Date
   const messages = texts.filter((m) => m.text !== "");
   return {
     messages,
+    attachments: entries.filter((e) => e.kind === "media").map((e) => toAttachment(e, dateOrder)),
     // Mensagem sem texto (ex.: `Autor: ` vazio) não é conhecimento: conta como ignorada, junto das de sistema.
     systemCount: entries.filter((e) => e.kind === "system").length + texts.length - messages.length,
     mediaCount: entries.filter((e) => e.kind === "media").length,
@@ -107,7 +123,7 @@ function parseHeader(line: string, format: Format | undefined): RawEntry | null 
   const header = matchHeader(clean, format);
   if (!header) return null;
   const [, a, b, year, hour, minute, second, ampm, rest = ""] = header.match;
-  const { kind, author, text } = classify(rest, header.format === "ios");
+  const { kind, author, text, attachment } = classify(rest, header.format === "ios");
   return {
     format: header.format,
     a: Number(a),
@@ -119,6 +135,7 @@ function parseHeader(line: string, format: Format | undefined): RawEntry | null 
     twelveHour: ampm !== undefined,
     kind,
     author,
+    attachment,
     text,
   };
 }
@@ -131,15 +148,27 @@ function matchHeader(clean: string, format: Format | undefined): { format: Forma
   return android ? { format: "android", match: android } : null;
 }
 
-function classify(rest: string, ios: boolean): { kind: Kind; author: string; text: string } {
+interface Classified {
+  readonly kind: Kind;
+  readonly author: string;
+  readonly text: string;
+  readonly attachment: string | undefined;
+}
+
+function classify(rest: string, ios: boolean): Classified {
   const separator = rest.indexOf(": ");
-  if (separator < 0) return { kind: "system", author: "", text: "" };
+  if (separator < 0) return { kind: "system", author: "", text: "", attachment: undefined };
   const author = rest.slice(0, separator).replace(MARKS, "").trim().replace(NOT_IN_CONTACTS, "");
   const rawText = rest.slice(separator + 2);
   const text = rawText.replace(MARKS, "").trim();
-  if (MEDIA.test(text)) return { kind: "media", author, text: "" };
-  if (DELETED.test(text) || (ios && rawText.startsWith("\u200e"))) return { kind: "system", author, text: "" };
-  return { kind: "text", author, text };
+  if (MEDIA.test(text)) return { kind: "media", author, text: "", attachment: attachmentName(text) };
+  if (DELETED.test(text) || (ios && rawText.startsWith("\u200e"))) return { kind: "system", author, text: "", attachment: undefined };
+  return { kind: "text", author, text, attachment: undefined };
+}
+
+/** Nome do arquivo do anexo, ou `undefined` para `<Mídia oculta>` (sem nome nem tipo). */
+function attachmentName(text: string): string | undefined {
+  return (ANDROID_ATTACHMENT.exec(text) ?? IOS_ATTACHMENT.exec(text))?.[1]?.trim() || undefined;
 }
 
 /** Linha sem cabeçalho continua a mensagem anterior: texto em várias linhas ou legenda de um anexo. */
@@ -170,13 +199,17 @@ function detectDateOrder(entries: readonly RawEntry[]): DateOrder {
   throw new ImportFormatError("ambiguous_date", "Datas ambíguas (dia e mês ≤ 12). Informe --formato-data dmy ou mdy.");
 }
 
-function toMessage(e: RawEntry, order: DateOrder): ParsedMessage {
+function localOf(e: RawEntry, order: DateOrder): LocalDateTime {
   const [day, month] = order === "dmy" ? [e.a, e.b] : [e.b, e.a];
-  return {
-    local: { year: e.year, month, day, hour: e.hour, minute: e.minute, second: e.second },
-    author: e.author,
-    text: e.text.replace(EDITED, "").trim(),
-  };
+  return { year: e.year, month, day, hour: e.hour, minute: e.minute, second: e.second };
+}
+
+function toMessage(e: RawEntry, order: DateOrder): ParsedMessage {
+  return { local: localOf(e, order), author: e.author, text: e.text.replace(EDITED, "").trim() };
+}
+
+function toAttachment(e: RawEntry, order: DateOrder): ParsedAttachment {
+  return { local: localOf(e, order), author: e.author, fileName: e.attachment, captioned: e.text.trim() !== "" };
 }
 
 function normalizeYear(year: number): number {

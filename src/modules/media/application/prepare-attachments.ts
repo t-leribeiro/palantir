@@ -24,6 +24,12 @@ export interface SourceLookup {
   >;
 }
 
+/** Métricas da preparação (D-20): nada de conteúdo, só tipo e motivo. */
+export interface PrepareObserver {
+  stored(kind: MediaKind): void;
+  unavailable(kind: MediaKind, reason: NonNullable<Attachment["unavailableReason"]>): void;
+}
+
 export interface PrepareAttachmentsDeps {
   readonly sources: SourceLookup;
   readonly store: ObjectStore;
@@ -32,6 +38,7 @@ export interface PrepareAttachmentsDeps {
   /** Esperas entre tentativas de download (padrão 1, 2 e 4 s). */
   readonly retryDelaysMs?: readonly number[];
   readonly sleep?: (ms: number) => Promise<void>;
+  readonly observer?: PrepareObserver;
 }
 
 const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
@@ -75,6 +82,13 @@ export function createPrepareAttachments(deps: PrepareAttachmentsDeps): PrepareA
     };
   }
 
+  async function observed(attachment: Attachment, kind: MediaKind, target: Target, fetch: MediaFetch): Promise<Attachment> {
+    const prepared = await prepareOne(attachment, kind, target, fetch);
+    if (prepared.status === "stored") deps.observer?.stored(kind);
+    else if (prepared.unavailableReason) deps.observer?.unavailable(kind, prepared.unavailableReason);
+    return prepared;
+  }
+
   return async (message, fetch) => {
     const pending = message.attachments.filter((a) => a.status === undefined && a.fetchRef !== undefined);
     if (pending.length === 0) return message;
@@ -84,7 +98,7 @@ export function createPrepareAttachments(deps: PrepareAttachmentsDeps): PrepareA
     const attachments: Attachment[] = [];
     for (const a of message.attachments) {
       const isPending = a.status === undefined && a.fetchRef !== undefined;
-      attachments.push(isPending ? await prepareOne(a, kind ?? mediaKindOfMime(a.mimeType), check, fetch) : a);
+      attachments.push(isPending ? await observed(a, kind ?? mediaKindOfMime(a.mimeType), check, fetch) : a);
     }
     return { ...message, attachments };
   };

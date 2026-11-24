@@ -31,6 +31,13 @@ export interface FakeInbound {
   readonly timestamp: string;
 }
 
+/** Áudio capturado no canal de teste (feature 005): o arquivo fica disponível para `fetchMedia`. */
+export interface FakeInboundAudio extends Omit<FakeInbound, "text"> {
+  readonly bytes: Uint8Array;
+  readonly mimeType?: string;
+  readonly durationSeconds?: number;
+}
+
 export interface FakeAgentMessage {
   readonly senderAccountId: string;
   readonly text: string;
@@ -54,6 +61,9 @@ export interface FakeChannelOptions {
 
 export interface FakeChannel extends KnowledgeChannel {
   receiveInbound(input: FakeInbound): Promise<IngestOutcome>;
+  receiveInboundAudio(input: FakeInboundAudio): Promise<IngestOutcome>;
+  /** Os próximos `count` downloads falham com `download_failed`. */
+  failNextFetches(count: number): void;
   receiveAgentMessage(input: FakeAgentMessage): Promise<AgentReply | null>;
   outbox(limit?: number): readonly OutboxItem[];
   clearOutbox(): void;
@@ -74,11 +84,13 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
   let connected = false;
   let onInbound: InboundHandler | undefined;
   let onAgent: AgentHandler | undefined;
+  const media = new Map<string, { bytes: Uint8Array; mimeType: string }>();
+  let fetchFailures = 0;
 
   const capabilities: ChannelCapabilities = {
     supportsLiveCapture: true,
     supportsHistory: false,
-    supportsMedia: false,
+    supportsMedia: true,
     maxMessageLength: MAX_MESSAGE_LENGTH,
   };
 
@@ -135,8 +147,33 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
     onAgentMessage(handler) {
       onAgent = handler;
     },
-    async fetchMedia() {
-      throw new MediaUnavailableError("unsupported");
+    async fetchMedia(fetchRef) {
+      const item = media.get(fetchRef);
+      if (!item) throw new MediaUnavailableError("expired");
+      if (fetchFailures > 0) {
+        fetchFailures -= 1;
+        throw new MediaUnavailableError("download_failed");
+      }
+      return item;
+    },
+    failNextFetches(count) {
+      fetchFailures = count;
+    },
+    async receiveInboundAudio(input) {
+      const handler = requireConnected(onInbound);
+      const fetchRef = `fake-media:${input.externalMessageId}`;
+      const mimeType = input.mimeType ?? "audio/ogg; codecs=opus";
+      media.set(fetchRef, { bytes: input.bytes, mimeType });
+      const text = build({ ...input, text: "-", accountId: input.accountId ?? DEFAULT_ACCOUNT_ID, captureMethod: "live" }) as Record<string, unknown>;
+      const { text: _text, ...base } = text;
+      const duration = input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds };
+      const message = { ...base, kind: "audio", attachments: [{ id: `${input.externalMessageId}:0`, mimeType, sizeBytes: input.bytes.length, fetchRef, ...duration }] };
+      const valid = validateCanonicalMessage(message);
+      if (!valid.ok) {
+        options.onInvalid?.();
+        return { outcome: "rejected", reason: "invalid", details: valid.error.details };
+      }
+      return handler(valid.value);
     },
     async sendReply(destinationAccountId, reply) {
       const parts = splitForChannel(reply, MAX_MESSAGE_LENGTH);

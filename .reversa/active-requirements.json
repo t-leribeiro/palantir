@@ -4,12 +4,13 @@
   "feature-id": "005",
   "short-name": "perguntar-sobre-audios",
   "started-at": "2026-11-23T22:20:00-03:00",
-  "current-stage": "to-do",
+  "current-stage": "coding",
   "stages-completed": [
     "requirements",
     "clarify",
     "plan",
-    "to-do"
+    "to-do",
+    "coding"
   ],
   "paused-features": []
 }

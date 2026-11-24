@@ -25,6 +25,21 @@ runChannelContractSuite("fake", () => {
       async simulateAgentMessage(text) {
         await channel.receiveAgentMessage({ senderAccountId: "fake-operator", text });
       },
+      async simulateInboundAudio(bytes) {
+        seq += 1;
+        await channel.receiveInboundAudio({
+          conversationId: "fake-group-1",
+          externalMessageId: `contract-audio-${seq}`,
+          senderId: "ana",
+          senderName: "Ana",
+          bytes,
+          durationSeconds: 3,
+          timestamp: "2026-11-22T10:00:00-03:00",
+        });
+      },
+      failNextDownloads(count) {
+        channel.failNextFetches(count);
+      },
       async simulateDisconnect() {
         await channel.disconnect();
       },

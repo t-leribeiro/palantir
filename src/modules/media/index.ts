@@ -42,6 +42,7 @@ export {
   type MediaFetch,
   type PrepareAttachments,
   type PrepareAttachmentsDeps,
+  type PrepareObserver,
   type SourceLookup,
 } from "./application/prepare-attachments.js";
 export {
@@ -61,3 +62,4 @@ export {
   type PgMediaUnitOfWorkOptions,
   type SweepPendingOptions,
 } from "./infrastructure/pg-media-repository.js";
+export { createOtelMediaObserver, type OtelMediaObserver } from "./infrastructure/otel-observer.js";

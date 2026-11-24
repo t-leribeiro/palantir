@@ -1,10 +1,11 @@
 // T024 / RF-08: suíte de contrato reutilizável. Todo adaptador de canal precisa passar nela.
 // Uso: runChannelContractSuite("fake", () => createHarness()).
 import { describe, expect, it } from "vitest";
-import type {
-  AgentReply,
-  CanonicalMessage,
-  KnowledgeChannel,
+import {
+  MediaUnavailableError,
+  type AgentReply,
+  type CanonicalMessage,
+  type KnowledgeChannel,
 } from "../../src/contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../src/platform/contracts/validator.js";
 
@@ -20,6 +21,10 @@ export interface ChannelDriver {
   deliveredReplies(): readonly { destinationAccountId: string; parts: readonly string[] }[];
   /** Destino válido para `sendReply` neste canal (padrão "destino-1"). */
   readonly replyDestination?: string;
+  /** Feature 005: simula um áudio chegando numa conversa capturada (canais com mídia). */
+  simulateInboundAudio?(bytes: Uint8Array): Promise<void>;
+  /** Os próximos `count` downloads de mídia falham. */
+  failNextDownloads?(count: number): void;
 }
 
 export interface ChannelHarness {
@@ -106,6 +111,37 @@ export function runChannelContractSuite(name: string, create: () => ChannelHarne
       const destination = driver.replyDestination ?? "destino-1";
       await channel.sendReply(destination, { text: "Posso responder perguntas sobre suas conversas.", outcome: "help", citations: [] });
       expect(driver.deliveredReplies()[0]?.parts).toEqual(["Posso responder perguntas sobre suas conversas."]);
+    });
+
+    it("mídia (1.3.0): anuncia o áudio com fetchRef e entrega os bytes por fetchMedia", async (ctx) => {
+      const { channel, driver, inbound } = await connected();
+      if (!channel.capabilities().supportsMedia || !driver.simulateInboundAudio) ctx.skip();
+      const bytes = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 1, 2, 3]);
+      await driver.simulateInboundAudio?.(bytes);
+      const [msg] = inbound;
+      expect(validateCanonicalMessage(msg)).toMatchObject({ ok: true });
+      expect(msg?.kind).toBe("audio");
+      const ref = msg?.attachments[0]?.fetchRef;
+      expect(ref).toBeTypeOf("string");
+      expect(msg?.attachments[0]?.status).toBeUndefined();
+      expect(Buffer.from((await channel.fetchMedia(ref ?? "")).bytes).equals(Buffer.from(bytes))).toBe(true);
+    });
+
+    it("mídia (1.3.0): referência inválida rejeita com MediaUnavailableError", async (ctx) => {
+      const { channel } = await connected();
+      if (!channel.capabilities().supportsMedia) ctx.skip();
+      await expect(channel.fetchMedia("referencia-inexistente")).rejects.toBeInstanceOf(MediaUnavailableError);
+    });
+
+    it("mídia (1.3.0): falha no download não perde a mensagem", async (ctx) => {
+      const { channel, driver, inbound } = await connected();
+      if (!channel.capabilities().supportsMedia || !driver.simulateInboundAudio || !driver.failNextDownloads) ctx.skip();
+      await driver.simulateInboundAudio?.(new Uint8Array([9, 9, 9]));
+      driver.failNextDownloads?.(1);
+      const ref = inbound[0]?.attachments[0]?.fetchRef ?? "";
+      await expect(channel.fetchMedia(ref)).rejects.toMatchObject({ reason: "download_failed" });
+      expect(inbound).toHaveLength(1);
+      expect((await channel.fetchMedia(ref)).bytes).toHaveLength(3);
     });
 
     it("volta a entregar mensagens depois de reconectar", async () => {
