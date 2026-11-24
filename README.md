@@ -2,7 +2,7 @@
 
 Personal Knowledge Agent: transforma conversas dispersas (grupos do WhatsApp, incluindo áudios) em uma memória pesquisável, consultada pelo próprio canal, com a fonte de cada resposta. WhatsApp-first, not WhatsApp-only.
 
-Estado: **S4 implementada** (feature `005`): áudios importados e capturados ao vivo são guardados cifrados, transcritos localmente (Whisper em CPU, motor substituível) e citados com a duração e o ponto do trecho. Demonstração manual pendente. A S3 (captura ao vivo de um grupo de teste autorizado) está entregue. Busca semântica vem na S6.
+Estado: **S4 entregue** (feature `005`): áudios importados e capturados ao vivo são guardados cifrados, transcritos localmente (Whisper `large-v3-turbo` em CPU, motor substituível) e citados com a duração e o ponto do trecho; "em qual áudio..." busca só entre áudios. A S3 (captura ao vivo de um grupo de teste autorizado) está entregue. Busca semântica vem na S6.
 
 - Produto: [`_reversa_sdd/prd.md`](_reversa_sdd/prd.md) e specs em [`_reversa_sdd/sdd/`](_reversa_sdd/sdd/)
 - Plano e status das entregas: [`docs/plano-de-fatias.md`](docs/plano-de-fatias.md)
@@ -39,7 +39,7 @@ Perguntar pelo WhatsApp (S2): cadastre seu número com `npm run whatsapp:link --
 
 Capturar um grupo de teste ao vivo (S3): ligue `PALANTIR_WHATSAPP_CAPTURE=agent` no `.env`, adicione o chip ao grupo, rode `npm run dev:whatsapp` e `npm run dev:worker`, e autorize com `npm run whatsapp:grupos -- autorizar <número> --consentimento "<como os participantes foram avisados>" [--conversa "<nome da importação>"]` (o chip precisa ser membro do grupo; nome do grupo diferente do `--conversa` exige `--confirmar`) (roteiro em [`onboarding.md` da 004](_reversa_forward/004-captura-ao-vivo-grupo-teste/onboarding.md)).
 
-Perguntar sobre áudios (S4): o `npm run setup` sobe o motor de transcrição e gera `PALANTIR_MEDIA_KEY`; baixe os modelos com `npm run transcricao:modelos -- <id>`, meça com `npm run eval:transcricao` (preparar, fleurs, medir) e escolha `PALANTIR_TRANSCRIBER_MODEL`; importe o export **com mídias** e pergunte "em qual áudio falaram de X?" (roteiro em [`onboarding.md` da 005](_reversa_forward/005-perguntar-sobre-audios/onboarding.md); decisões no [ADR-0010](docs/adr/0010-transcricao-local-substituivel.md)).
+Perguntar sobre áudios (S4): o `npm run setup` sobe o motor de transcrição e gera `PALANTIR_MEDIA_KEY`; baixe os modelos com `npm run transcricao:modelos -- <id>`, meça com `npm run eval:transcricao` (preparar, fleurs, medir) e escolha `PALANTIR_TRANSCRIBER_MODEL` (padrão: `deepdml/faster-whisper-large-v3-turbo-ct2`); importe o export **com mídias** e pergunte "em qual áudio falaram de X?" (roteiro em [`onboarding.md` da 005](_reversa_forward/005-perguntar-sobre-audios/onboarding.md); decisões no [ADR-0010](docs/adr/0010-transcricao-local-substituivel.md)).
 
 Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`onboarding.md`](_reversa_forward/001-walking-skeleton/onboarding.md). `npm run teardown` destrói o ambiente.
 
