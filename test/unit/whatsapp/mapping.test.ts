@@ -1,6 +1,6 @@
 // T013: funções puras do provedor real (D-06, D-14, D-16, D-17).
 import { describe, expect, it } from "vitest";
-import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, lidFromJid, phoneFromJid, textOf } from "../../../src/channels/whatsapp/provider/mapping.js";
+import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, phoneFromJid, textOf } from "../../../src/channels/whatsapp/provider/mapping.js";
 
 describe("phoneFromJid", () => {
   it("converte JID de número em E.164, inclusive com dispositivo e sem o nono dígito", () => {
@@ -85,5 +85,21 @@ describe("backoffMs", () => {
     expect(backoffMs(2, () => 0)).toBe(3200);
     expect(backoffMs(2, () => 1)).toBe(4800);
     expect(backoffMs(9, () => 1)).toBe(60000);
+  });
+});
+
+describe("libraryErrorReason (diagnóstico sem conteúdo)", () => {
+  it("pega só nome e mensagem do erro, em err, error ou no próprio objeto", () => {
+    const err = new Error("No SenderKeyRecord found for decryption");
+    expect(libraryErrorReason({ key: { remoteJid: "5511999998888@s.whatsapp.net" }, err })).toBe("Error: No SenderKeyRecord found for decryption");
+    expect(libraryErrorReason({ error: new TypeError("Bad MAC") })).toBe("TypeError: Bad MAC");
+    expect(libraryErrorReason(new Error("x"))).toBe("Error: x");
+  });
+
+  it("mascara números longos, corta em 80 caracteres e ignora o que não é erro", () => {
+    expect(libraryErrorReason({ err: new Error("sem sessão para 5511999998888.0") })).toBe("Error: sem sessão para #.0");
+    expect(libraryErrorReason({ err: new Error("a".repeat(200)) })?.length).toBe(80);
+    expect(libraryErrorReason({ key: {}, text: "mensagem secreta" })).toBeUndefined();
+    expect(libraryErrorReason(null)).toBeUndefined();
   });
 });

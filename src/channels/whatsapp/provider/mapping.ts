@@ -103,3 +103,16 @@ export function backoffMs(attempt: number, random: () => number = Math.random): 
   const jittered = exponential * (1 - JITTER + 2 * JITTER * random());
   return Math.round(Math.min(MAX_MS, jittered));
 }
+
+/**
+ * Motivo técnico de um erro da biblioteca (ex.: "Bad MAC", "No SenderKeyRecord found for decryption"),
+ * sem o resto do objeto, que pode trazer a mensagem ou a chave dela. Sequências longas de dígitos
+ * (telefones, ids) viram "#" e o texto é cortado em 80 caracteres.
+ */
+export function libraryErrorReason(obj: unknown): string | undefined {
+  const candidates = [obj, (obj as { err?: unknown } | null)?.err, (obj as { error?: unknown } | null)?.error];
+  const error = candidates.find((c): c is Error => c instanceof Error);
+  if (!error) return undefined;
+  const reason = `${error.name}: ${error.message}`.replace(/\d{5,}/g, "#").replace(/\s+/g, " ").trim();
+  return reason.slice(0, 80);
+}

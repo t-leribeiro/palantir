@@ -19,7 +19,7 @@ import makeWASocket, {
 } from "baileys";
 import { SessionFileError, type EncryptedFileStore } from "../session/encrypted-file-store.js";
 import { MediaUnavailableError } from "../../../contracts/channel/knowledge-channel.js";
-import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, lidFromJid, mediaInfoOf, phoneFromJid, textOf } from "./mapping.js";
+import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, mediaInfoOf, phoneFromJid, textOf } from "./mapping.js";
 import type { GroupInfo, IncomingDirect, IncomingGroupMessage, IncomingMedia, SessionState, WhatsAppProvider } from "./provider.js";
 import { createRecentMedia } from "./recent-media.js";
 
@@ -91,7 +91,7 @@ export async function createPersistedAuthState(store: EncryptedFileStore): Promi
   };
 }
 
-/** Logger da biblioteca no nível `error`, descartando objetos (podem conter mensagens ou credenciais). */
+/** Logger da biblioteca no nível `error`: do objeto, só o motivo técnico do erro (o resto pode conter mensagens ou credenciais). */
 function quietLogger(log: ProviderLog): SocketLogger {
   const silent = () => undefined;
   const logger: SocketLogger = {
@@ -101,7 +101,10 @@ function quietLogger(log: ProviderLog): SocketLogger {
     debug: silent,
     info: silent,
     warn: silent,
-    error: (_obj: unknown, msg?: string) => log.error(`biblioteca do WhatsApp: ${typeof msg === "string" ? msg.slice(0, 120) : "erro"}`),
+    error: (obj: unknown, msg?: string) => {
+      const reason = libraryErrorReason(obj);
+      log.error(`biblioteca do WhatsApp: ${typeof msg === "string" ? msg.slice(0, 120) : "erro"}${reason ? ` (${reason})` : ""}`);
+    },
   };
   return logger;
 }
