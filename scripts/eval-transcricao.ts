@@ -153,7 +153,7 @@ async function waitEngineIdle(url: string): Promise<void> {
     announced = true;
     await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS));
   }
-  console.log("O motor não descarregou o modelo anterior a tempo: tempo e memória deste modelo podem sair distorcidos.");
+  throw new Error("O motor não descarregou o modelo anterior em 15 min e pode estar travado. Reinicie com: docker restart palantir-transcriber");
 }
 
 async function loadedModels(url: string): Promise<number | undefined> {
