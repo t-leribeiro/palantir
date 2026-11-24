@@ -75,6 +75,20 @@ module.exports = {
       from: { path: "^src/", pathNot: "^src/channels/whatsapp/provider/baileys-provider\\.ts$" },
       to: { path: "(^|node_modules/)baileys(/|$)" },
     },
+    {
+      name: "object-store-isolated",
+      comment: "O SDK do S3 só entra pelo armazenamento de mídia (feature 005, D-06).",
+      severity: "error",
+      from: { path: "^src/", pathNot: "^src/modules/media/infrastructure/object-store/" },
+      to: { path: "(^|node_modules/)@aws-sdk/" },
+    },
+    {
+      name: "transcriber-engine-isolated",
+      comment: "Os adaptadores do motor de transcrição só são usados pela infraestrutura e pela API pública de media (feature 005, RF-07, D-21).",
+      severity: "error",
+      from: { path: "^src/", pathNot: ["^src/modules/media/index\\.ts$", "^src/modules/media/infrastructure/"] },
+      to: { path: "^src/modules/media/infrastructure/transcribers/" },
+    },
   ],
   options: {
     doNotFollow: { path: "node_modules" },

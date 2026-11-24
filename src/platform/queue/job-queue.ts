@@ -15,11 +15,30 @@ export interface JobQueue {
   start(): Promise<void>;
   stop(): Promise<void>;
   /** Enfileira usando o client de uma transação aberta (atomicidade com a gravação). */
-  sendInTransaction(client: Queryable, queue: string, data: object, options?: { singletonKey?: string }): Promise<void>;
-  work<T extends object>(queue: string, handler: (data: T) => Promise<void>): Promise<void>;
+  sendInTransaction(client: Queryable, queue: string, data: object, options?: SendOptions): Promise<void>;
+  /** Consome a fila; o handler recebe se esta é a última tentativa (feature 005: grava `failed` antes de desistir). */
+  work<T extends object>(queue: string, handler: (data: T, attempt: JobAttempt) => Promise<void>, options?: WorkOptions): Promise<void>;
   check(): Promise<"ok" | "fail">;
   /** Jobs em espera ou em execução (usado por testes e health). */
   pendingCount(queue: string): Promise<number>;
+}
+
+export interface SendOptions {
+  readonly singletonKey?: string;
+  /** Maior primeiro (feature 005, RN-07). */
+  readonly priority?: number;
+  readonly expireInSeconds?: number;
+}
+
+export interface WorkOptions {
+  /** Jobs em paralelo neste processo (padrão 1). */
+  readonly concurrency?: number;
+}
+
+export interface JobAttempt {
+  readonly retryCount: number;
+  readonly retryLimit: number;
+  readonly lastAttempt: boolean;
 }
 
 export function createJobQueue(databaseUrl: string, queues: readonly QueueDefinition[]): JobQueue {
@@ -52,12 +71,19 @@ export function createJobQueue(databaseUrl: string, queues: readonly QueueDefini
       const id = await boss.send(queue, data, {
         db: { executeSql: (text, values) => client.query(text, values as unknown[]) },
         ...(options.singletonKey ? { singletonKey: options.singletonKey } : {}),
+        ...(options.priority === undefined ? {} : { priority: options.priority }),
+        ...(options.expireInSeconds === undefined ? {} : { expireInSeconds: options.expireInSeconds }),
       });
       if (id === null && !options.singletonKey) throw new Error(`pg-boss recusou o job na fila ${queue}`);
     },
-    async work(queue, handler) {
-      await boss.work<object>(queue, { batchSize: 1, pollingIntervalSeconds: 0.5 }, async (jobs) => {
-        for (const job of jobs) await handler(job.data as never);
+    async work(queue, handler, options = {}) {
+      const work = { batchSize: 1, pollingIntervalSeconds: 0.5, includeMetadata: true, localConcurrency: options.concurrency ?? 1 } as const;
+      await boss.work<object>(queue, work, async (jobs) => {
+        for (const job of jobs) {
+          // includeMetadata: o pg-boss devolve as tentativas junto do job.
+          const { retryCount, retryLimit } = job as unknown as { retryCount: number; retryLimit: number };
+          await handler(job.data as never, { retryCount, retryLimit, lastAttempt: retryCount >= retryLimit });
+        }
       });
     },
     async check() {

@@ -33,6 +33,8 @@ const REQUIRED_RULES = [
   "module-public-api-only",
   "no-module-cycles",
   "whatsapp-lib-isolated",
+  "object-store-isolated",
+  "transcriber-engine-isolated",
 ] as const;
 
 describe("regras de arquitetura (dependency-cruiser)", () => {

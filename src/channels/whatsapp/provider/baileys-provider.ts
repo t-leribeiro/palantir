@@ -4,6 +4,7 @@
 import makeWASocket, {
   BufferJSON,
   DisconnectReason,
+  downloadMediaMessage,
   initAuthCreds,
   makeCacheableSignalKeyStore,
   normalizeMessageContent,
@@ -17,8 +18,10 @@ import makeWASocket, {
   type WAMessageKey,
 } from "baileys";
 import { SessionFileError, type EncryptedFileStore } from "../session/encrypted-file-store.js";
-import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, lidFromJid, phoneFromJid, textOf } from "./mapping.js";
-import type { GroupInfo, IncomingDirect, IncomingGroupMessage, SessionState, WhatsAppProvider } from "./provider.js";
+import { MediaUnavailableError } from "../../../contracts/channel/knowledge-channel.js";
+import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, mediaInfoOf, phoneFromJid, textOf } from "./mapping.js";
+import type { GroupInfo, IncomingDirect, IncomingGroupMessage, IncomingMedia, SessionState, WhatsAppProvider } from "./provider.js";
+import { createRecentMedia } from "./recent-media.js";
 
 type Socket = ReturnType<typeof makeWASocket>;
 type SocketLogger = NonNullable<Parameters<typeof makeWASocket>[0]["logger"]>;
@@ -88,7 +91,7 @@ export async function createPersistedAuthState(store: EncryptedFileStore): Promi
   };
 }
 
-/** Logger da biblioteca no nível `error`, descartando objetos (podem conter mensagens ou credenciais). */
+/** Logger da biblioteca no nível `error`: do objeto, só o motivo técnico do erro (o resto pode conter mensagens ou credenciais). */
 function quietLogger(log: ProviderLog): SocketLogger {
   const silent = () => undefined;
   const logger: SocketLogger = {
@@ -98,7 +101,10 @@ function quietLogger(log: ProviderLog): SocketLogger {
     debug: silent,
     info: silent,
     warn: silent,
-    error: (_obj: unknown, msg?: string) => log.error(`biblioteca do WhatsApp: ${typeof msg === "string" ? msg.slice(0, 120) : "erro"}`),
+    error: (obj: unknown, msg?: string) => {
+      const reason = libraryErrorReason(obj);
+      log.error(`biblioteca do WhatsApp: ${typeof msg === "string" ? msg.slice(0, 120) : "erro"}${reason ? ` (${reason})` : ""}`);
+    },
   };
   return logger;
 }
@@ -132,10 +138,10 @@ function groupInfo(meta: Pick<GroupMetadata, "id" | "subject" | "size" | "partic
   return { groupId: meta.id, subject: meta.subject, participants: meta.size ?? meta.participants?.length ?? 0 };
 }
 
-function contentOf(message: WAMessage): { kind: ReturnType<typeof classifyContent>; text: string | undefined } {
+function contentOf(message: WAMessage): { kind: ReturnType<typeof classifyContent>; text: string | undefined; content: Record<string, unknown> | undefined } {
   const content = normalizeMessageContent(message.message) as Record<string, unknown> | undefined;
   const kind = classifyContent(content);
-  return { kind, text: kind === "text" ? textOf(content) : undefined };
+  return { kind, text: kind === "text" ? textOf(content) : undefined, content };
 }
 
 export function createBaileysProvider(options: BaileysProviderOptions): WhatsAppProvider {
@@ -146,6 +152,8 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
   let onDirect: ((message: IncomingDirect) => Promise<void>) | undefined;
   let onGroup: ((message: IncomingGroupMessage) => Promise<void>) | undefined;
   const groupListeners: ((groups: readonly GroupInfo[], complete: boolean) => void)[] = [];
+  /** Mídia de grupo anunciada e ainda não baixada (D-18): só o núcleo pede, depois da autorização. */
+  const recentMedia = createRecentMedia<WAMessage>();
   let refreshing = false;
   let socket: Socket | undefined;
   // Estado de autenticação em memória, lido do arquivo só na primeira conexão. As reconexões reutilizam
@@ -189,9 +197,10 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
   async function toGroup(message: WAMessage): Promise<IncomingGroupMessage | null> {
     const { key } = message;
     if (!key.remoteJid || key.fromMe || !key.id) return null;
-    const { kind, text } = contentOf(message);
+    const { kind, text, content } = contentOf(message);
     if (kind === "ignore") return null;
     const author = await resolveParticipant(key);
+    const media = announceMedia(key.id, message, content);
     return {
       id: key.id,
       groupId: key.remoteJid,
@@ -201,7 +210,29 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
       kind,
       ...(text ? { text } : {}),
       sentAt: timestampOf(message),
+      ...(media ? { media } : {}),
     };
+  }
+
+  /** Só anuncia: guarda a mensagem por pouco tempo e devolve a referência; nada é baixado aqui. */
+  function announceMedia(id: string, message: WAMessage, content: Record<string, unknown> | undefined): IncomingMedia | undefined {
+    const info = mediaInfoOf(content);
+    if (!info) return undefined;
+    recentMedia.remember(id, message);
+    return { ...info, fetchRef: id };
+  }
+
+  async function downloadMedia(fetchRef: string): Promise<Uint8Array> {
+    const message = recentMedia.take(fetchRef);
+    if (!message) throw new MediaUnavailableError("expired");
+    if (!socket) throw new MediaUnavailableError("download_failed");
+    const current = socket;
+    try {
+      const buffer = await downloadMediaMessage(message, "buffer", {}, { logger: quietLogger(log), reuploadRequest: current.updateMediaMessage });
+      return new Uint8Array(buffer);
+    } catch {
+      throw new MediaUnavailableError("download_failed");
+    }
   }
 
   async function toDirect(message: WAMessage): Promise<IncomingDirect | null> {
@@ -337,6 +368,7 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
       if (!socket) throw new Error("WhatsApp desconectado");
       return Object.values(await socket.groupFetchAllParticipating()).map(groupInfo);
     },
+    downloadMedia,
     async sendText(chatJid, text) {
       if (isGroupJid(chatJid)) throw new Error("envio a grupo bloqueado");
       if (!socket) throw new Error("WhatsApp desconectado");

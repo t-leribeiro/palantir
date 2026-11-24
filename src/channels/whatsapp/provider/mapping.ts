@@ -65,6 +65,34 @@ export function classifyContent(content: Content): DirectKind | "ignore" {
   return kind;
 }
 
+/** Campos da mídia na mensagem (feature 005, D-18): MIME, duração e tamanho, sem baixar nada. */
+export function mediaInfoOf(content: Content): { mimeType: string; seconds?: number; sizeBytes?: number } | undefined {
+  const type = Object.keys(content ?? {}).find((key) => !NOISE.has(key) && content?.[key] != null);
+  const kind = type ? KINDS[type] : undefined;
+  if (!type || !kind || kind === "text") return undefined;
+  return mediaFields(content?.[type] as MediaFields | undefined);
+}
+
+interface MediaFields {
+  readonly mimetype?: unknown;
+  readonly seconds?: unknown;
+  readonly fileLength?: unknown;
+}
+
+function mediaFields(media: MediaFields | undefined): { mimeType: string; seconds?: number; sizeBytes?: number } {
+  const seconds = toNumber(media?.seconds);
+  const sizeBytes = toNumber(media?.fileLength);
+  const mimeType = typeof media?.mimetype === "string" && media.mimetype !== "" ? media.mimetype : "application/octet-stream";
+  return { mimeType, ...(seconds === undefined ? {} : { seconds }), ...(sizeBytes === undefined ? {} : { sizeBytes }) };
+}
+
+/** Número de um campo protobuf (pode vir como Long). */
+function toNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 const BASE_MS = 1000;
 const MAX_MS = 60_000;
 const JITTER = 0.2;
@@ -74,4 +102,17 @@ export function backoffMs(attempt: number, random: () => number = Math.random): 
   const exponential = Math.min(MAX_MS, BASE_MS * 2 ** attempt);
   const jittered = exponential * (1 - JITTER + 2 * JITTER * random());
   return Math.round(Math.min(MAX_MS, jittered));
+}
+
+/**
+ * Motivo técnico de um erro da biblioteca (ex.: "Bad MAC", "No SenderKeyRecord found for decryption"),
+ * sem o resto do objeto, que pode trazer a mensagem ou a chave dela. Sequências longas de dígitos
+ * (telefones, ids) viram "#" e o texto é cortado em 80 caracteres.
+ */
+export function libraryErrorReason(obj: unknown): string | undefined {
+  const candidates = [obj, (obj as { err?: unknown } | null)?.err, (obj as { error?: unknown } | null)?.error];
+  const error = candidates.find((c): c is Error => c instanceof Error);
+  if (!error) return undefined;
+  const reason = `${error.name}: ${error.message}`.replace(/\d{5,}/g, "#").replace(/\s+/g, " ").trim();
+  return reason.slice(0, 80);
 }

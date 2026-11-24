@@ -11,6 +11,9 @@ interface Row {
   source_title: string;
   sent_at: Date;
   kind: string;
+  audio_start_s: string | null;
+  audio_end_s: string | null;
+  duration_s: string | null;
 }
 
 /**
@@ -33,29 +36,37 @@ WITH terms AS (
 SELECT c.message_id, c.text,
        (SELECT count(*) FROM unnest(q.lexs) l WHERE c.tsv @@ to_tsquery('simple', quote_literal(l)))::float8
          / cardinality(q.lexs) AS score,
-       COALESCE(p.display_name, p.external_id) AS author, s.title AS source_title, m.sent_at, m.kind
+       COALESCE(p.display_name, p.external_id) AS author, s.title AS source_title, m.sent_at, m.kind,
+       c.audio_start_s, c.audio_end_s, a.duration_s
   FROM q
   JOIN message_chunks c ON c.tsv @@ q.query
   JOIN messages m ON m.id = c.message_id
   JOIN participants p ON p.id = m.participant_id
   JOIN sources s ON s.id = m.source_id
+  LEFT JOIN attachments a ON a.message_id = m.id
  WHERE c.space_id = $1 AND m.space_id = $1 AND s.status <> 'deleting'
  ORDER BY score DESC, ts_rank(c.tsv, q.query) DESC, m.sent_at DESC
  LIMIT $3`;
+
+function toEvidence(r: Row): Evidence {
+  return {
+    messageId: r.message_id,
+    chunkText: r.text,
+    score: Number(r.score),
+    author: r.author,
+    sourceTitle: r.source_title,
+    sentAt: new Date(r.sent_at),
+    kind: r.kind,
+    ...(r.audio_start_s === null || r.audio_end_s === null ? {} : { audioStartS: Number(r.audio_start_s), audioEndS: Number(r.audio_end_s) }),
+    ...(r.duration_s === null ? {} : { durationSeconds: Number(r.duration_s) }),
+  };
+}
 
 export function createPgSearchIndex(db: Queryable): SearchIndex {
   return {
     async search(spaceId, query, limit): Promise<Evidence[]> {
       const { rows } = await db.query<Row>(SQL, [spaceId, query, limit, QUESTION_FILLER_WORDS.join(" ")]);
-      return rows.map((r) => ({
-        messageId: r.message_id,
-        chunkText: r.text,
-        score: Number(r.score),
-        author: r.author,
-        sourceTitle: r.source_title,
-        sentAt: new Date(r.sent_at),
-        kind: r.kind,
-      }));
+      return rows.map(toEvidence);
     },
   };
 }

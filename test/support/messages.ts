@@ -21,3 +21,9 @@ export function canonicalMessage(overrides: Partial<CanonicalMessage> = {}): Can
     ...overrides,
   };
 }
+
+/** A mesma mensagem sem `text` (áudio sem legenda, contrato 1.3.0), respeitando exactOptionalPropertyTypes. */
+export function withoutText(message: CanonicalMessage): CanonicalMessage {
+  const { text: _text, ...rest } = message;
+  return rest;
+}

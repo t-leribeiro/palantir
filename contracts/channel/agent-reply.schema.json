@@ -59,7 +59,36 @@
           "sentAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "audio",
+              "image",
+              "document",
+              "link"
+            ],
+            "description": "Tipo da mensagem citada (1.3.0)."
+          },
+          "audioStartS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Início do trecho citado no áudio, em segundos (1.3.0)."
+          },
+          "audioEndS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Fim do trecho citado no áudio, em segundos (1.3.0)."
           }
+        },
+        "dependentRequired": {
+          "audioStartS": [
+            "audioEndS"
+          ],
+          "audioEndS": [
+            "audioStartS"
+          ]
         }
       }
     }

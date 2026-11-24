@@ -5,9 +5,11 @@ import { ExportFileError, ImportFormatError, importWhatsAppExport, type DateOrde
 import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../modules/identity/index.js";
 import { createEnsureImportSource, createPgImportSourceRepository } from "../modules/sources/index.js";
 import { createPool, type Pool } from "../platform/db/index.js";
+import { loadConfig, type MediaConfig } from "../platform/config.js";
 import { createJobQueue } from "../platform/queue/index.js";
 import { DomainError } from "../shared/index.js";
 import { QUEUES, buildIngest } from "./compose.js";
+import { MediaConfigError, buildObjectStore, buildPrepare, ensureStorage, exportMedia } from "./media.js";
 
 export interface ImportCommand {
   readonly file: string;
@@ -45,9 +47,10 @@ export function parseImportArgs(argv: readonly string[]): ImportCommand {
   };
 }
 
-export async function runImport(command: ImportCommand, pool: Pool, databaseUrl: string): Promise<ImportReport> {
+export async function runImport(command: ImportCommand, pool: Pool, databaseUrl: string, media?: MediaConfig): Promise<ImportReport> {
   const owner = await createResolveUserByChannelAccount(createPgIdentityRepository(pool))(command.owner.provider, command.owner.accountId);
   if (!owner) throw new UsageError(`Conta dona não encontrada: ${command.owner.provider}:${command.owner.accountId}. Rode npm run seed.`);
+  const prepare = await mediaPrepare(pool, media);
   const queue = createJobQueue(databaseUrl, QUEUES);
   await queue.start();
   try {
@@ -55,11 +58,19 @@ export async function runImport(command: ImportCommand, pool: Pool, databaseUrl:
     return await importWhatsAppExport(
       command.file,
       { conversation: command.conversation, timeZone: command.timeZone, ...(command.dateOrder ? { dateOrder: command.dateOrder } : {}) },
-      { ensureSource: (title) => ensure(owner, title), ingest: buildIngest(pool, queue) },
+      { ensureSource: (title) => ensure(owner, title), ingest: buildIngest(pool, queue), ...exportMedia, ...(prepare ? { prepare } : {}) },
     );
   } finally {
     await queue.stop();
   }
+}
+
+/** Feature 005: com áudio na política, os áudios do export são guardados; o armazenamento é conferido antes. */
+async function mediaPrepare(pool: Pool, media: MediaConfig | undefined) {
+  if (!media?.storeKinds.includes("audio")) return undefined;
+  const store = buildObjectStore(media);
+  await ensureStorage(store);
+  return buildPrepare(pool, store, media);
 }
 
 const number = new Intl.NumberFormat("pt-BR");
@@ -74,14 +85,26 @@ export function formatReport(report: ImportReport): string {
     `Já existentes (reimportação): ${number.format(report.existing)}`,
     ...(report.reconciled > 0 ? [`Reconciliadas com a captura ao vivo: ${number.format(report.reconciled)}`] : []),
     `Mensagens de sistema ou sem texto ignoradas: ${number.format(report.systemIgnored)}`,
-    `Mídias encontradas (tratadas na S4): ${number.format(report.mediaFound)}`,
+    ...audioLines(report),
+    `Outras mídias encontradas (não guardadas): ${number.format(report.otherMedia)}`,
     `Linhas não reconhecidas: ${number.format(report.unrecognizedLines)}`,
     ...(report.rejected > 0 ? [`Recusadas pelo contrato: ${number.format(report.rejected)}`] : []),
     "A indexação roda no worker: as mensagens ficam pesquisáveis em instantes.",
   ].join("\n");
 }
 
-const EXPECTED = [UsageError, ExportFileError, ImportFormatError, DomainError, RangeError];
+/** Linhas de áudio do relatório, só quando maiores que zero (interfaces/cli-importacao-e-medicao.md). */
+function audioLines(report: ImportReport): string[] {
+  const line = (label: string, n: number, suffix = "") => (n > 0 ? [`${label}: ${number.format(n)}${suffix}`] : []);
+  return [
+    ...line("Áudios vinculados", report.audiosLinked),
+    ...line("Áudios ausentes no export", report.audiosMissing),
+    ...line("Áudios com legenda (só o texto entrou)", report.audiosCaptioned),
+    ...line("Áudios na fila de transcrição", report.audiosQueued, ' (acompanhe no painel "Mídia")'),
+  ];
+}
+
+const EXPECTED = [UsageError, ExportFileError, ImportFormatError, DomainError, RangeError, MediaConfigError];
 
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -89,7 +112,7 @@ async function main(): Promise<void> {
   const command = parseImportArgs(process.argv.slice(2));
   const pool = createPool(databaseUrl);
   try {
-    process.stdout.write(`${formatReport(await runImport(command, pool, databaseUrl))}\n`);
+    process.stdout.write(`${formatReport(await runImport(command, pool, databaseUrl, loadConfig().media))}\n`);
   } finally {
     await pool.end();
   }

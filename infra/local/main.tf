@@ -68,6 +68,12 @@ module "object_storage" {
   secret_key   = random_password.s3_secret.result
 }
 
+module "transcriber" {
+  source       = "../modules/transcriber"
+  name_prefix  = var.name_prefix
+  network_name = docker_network.palantir.name
+}
+
 module "observability" {
   source                 = "../modules/observability"
   name_prefix            = var.name_prefix
@@ -97,6 +103,10 @@ output "s3_access_key" {
 output "s3_secret_key" {
   value     = random_password.s3_secret.result
   sensitive = true
+}
+
+output "transcriber_url" {
+  value = module.transcriber.url
 }
 
 output "otlp_endpoint" {

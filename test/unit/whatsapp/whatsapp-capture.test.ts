@@ -56,7 +56,12 @@ const groupMessage = (overrides: Partial<IncomingGroupMessage> = {}): IncomingGr
   ...overrides,
 });
 
-function setup(roles: WhatsAppRoles = { answer: true, capture: true }, routes?: Record<string, CaptureRouteRef>, outcome: IngestOutcome["outcome"] = "accepted") {
+function setup(
+  roles: WhatsAppRoles = { answer: true, capture: true },
+  routes?: Record<string, CaptureRouteRef>,
+  outcome: IngestOutcome["outcome"] = "accepted",
+  mediaKinds: readonly ("audio" | "image")[] = [],
+) {
   const provider = createSimulatedProvider();
   const { observer, events } = observerSpy();
   const { ports, synced } = memoryPorts(routes);
@@ -71,6 +76,7 @@ function setup(roles: WhatsAppRoles = { answer: true, capture: true }, routes?: 
     sendRetryDelaysMs: [],
     roles,
     capturePorts: ports,
+    captureMediaKinds: mediaKinds,
   });
   const inbound: CanonicalMessage[] = [];
   const asked: CanonicalMessage[] = [];
@@ -204,3 +210,49 @@ describe("papéis do canal (D-02)", () => {
 });
 
 const nextTick = () => new Promise((resolve) => setImmediate(resolve));
+
+describe("captura de áudio (feature 005, RN-01, D-18)", () => {
+  const audio = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 7, 7]);
+
+  it("com áudio ligado: áudio de grupo autorizado vira mensagem audio com fetchRef, sem baixar nada", async () => {
+    const { provider, channel, inbound, events } = setup(undefined, undefined, "accepted", ["audio"]);
+    await channel.connect();
+    await provider.deliverGroupAudio({ id: "A-1", groupId: GROUP, senderPhone: "+5511988887777", senderName: "Ana Souza", sentAt: new Date(NOW.getTime() - 5000) }, { bytes: audio, seconds: 42 });
+    expect(validateCanonicalMessage(inbound[0])).toMatchObject({ ok: true });
+    expect(inbound[0]).toMatchObject({
+      kind: "audio",
+      source: { externalMessageId: "A-1", conversationId: "export:t3" },
+      attachments: [{ id: "A-1:0", mimeType: "audio/ogg; codecs=opus", fetchRef: "sim-A-1", sizeBytes: 6, durationSeconds: 42 }],
+    });
+    expect(inbound[0]).not.toHaveProperty("text");
+    expect(provider.downloads()).toEqual([]);
+    expect(events).toContain("captured:accepted");
+    expect(Buffer.from((await channel.fetchMedia("sim-A-1")).bytes).equals(Buffer.from(audio))).toBe(true);
+  });
+
+  it("áudio de grupo não autorizado ou anterior à autorização é descartado sem download", async () => {
+    const { provider, channel, inbound, events } = setup(undefined, undefined, "accepted", ["audio"]);
+    await channel.connect();
+    await provider.deliverGroupAudio({ id: "A-2", groupId: "120363000000000099@g.us", senderPhone: null, sentAt: NOW }, { bytes: audio });
+    await provider.deliverGroupAudio({ id: "A-3", groupId: GROUP, senderPhone: null, sentAt: new Date(AUTHORIZED_AT.getTime() - 1000) }, { bytes: audio });
+    expect(inbound).toEqual([]);
+    expect(provider.downloads()).toEqual([]);
+    expect(events).toEqual(expect.arrayContaining(["discarded:not_authorized", "discarded:before_authorization"]));
+  });
+
+  it("com áudio desligado (padrão), segue como na S3: contado e descartado", async () => {
+    const { provider, channel, inbound, events } = setup();
+    await channel.connect();
+    await provider.deliverGroupAudio({ id: "A-4", groupId: GROUP, senderPhone: null, sentAt: new Date(NOW.getTime() - 5000) }, { bytes: audio });
+    expect(inbound).toEqual([]);
+    expect(events).toEqual(expect.arrayContaining(["discarded:media", "media:audio"]));
+  });
+
+  it("imagem continua descartada mesmo com áudio ligado", async () => {
+    const { provider, channel, inbound, events } = setup(undefined, undefined, "accepted", ["audio"]);
+    await channel.connect();
+    await provider.deliverGroup(groupMessage({ kind: "image", media: { mimeType: "image/jpeg", fetchRef: "x" } }));
+    expect(inbound).toEqual([]);
+    expect(events).toContain("media:image");
+  });
+});

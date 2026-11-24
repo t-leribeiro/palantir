@@ -27,6 +27,7 @@ runChannelContractSuite("whatsapp com captura (provedor simulado)", () => {
     sendRetryDelaysMs: [],
     roles: { answer: true, capture: true },
     capturePorts,
+    captureMediaKinds: ["audio"],
   });
   return {
     channel,
@@ -35,6 +36,13 @@ runChannelContractSuite("whatsapp com captura (provedor simulado)", () => {
       async simulateInbound(text) {
         seq += 1;
         await provider.deliverGroup({ id: `CAPTURE-${seq}`, groupId: GROUP, senderPhone: PHONE, senderName: "Ana", kind: "text", text, sentAt: new Date() });
+      },
+      async simulateInboundAudio(bytes) {
+        seq += 1;
+        await provider.deliverGroupAudio({ id: `CAPTURE-A-${seq}`, groupId: GROUP, senderPhone: PHONE, senderName: "Ana", sentAt: new Date() }, { bytes, seconds: 3 });
+      },
+      failNextDownloads(count) {
+        provider.failNextDownloads(count);
       },
       async simulateAgentMessage(text) {
         seq += 1;

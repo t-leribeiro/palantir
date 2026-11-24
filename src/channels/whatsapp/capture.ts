@@ -1,5 +1,6 @@
 // Captura de grupos autorizados (feature 004: RN-01, RN-07, RN-10; D-05, D-11 a D-13). Uma mensagem de grupo
-// só vira CanonicalMessage `live` quando o grupo tem captura ativa, é posterior à autorização e é texto.
+// só vira CanonicalMessage `live` quando o grupo tem captura ativa, é posterior à autorização e é texto ou,
+// com o áudio ligado (feature 005, D-18), áudio: o arquivo só é anunciado; o núcleo baixa depois de conferir.
 // O destino é a fonte autorizada (ex.: `export:t3`), então a ingestão resolve a fonte como sempre.
 import type { CanonicalMessage, IngestOutcome, InboundHandler } from "../../contracts/channel/knowledge-channel.js";
 import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
@@ -47,17 +48,27 @@ export function participantExternalId(message: Pick<IncomingGroupMessage, "sende
 }
 
 export function toLiveCanonical(message: IncomingGroupMessage, route: CaptureRouteRef, deps: { readonly ids: IdGenerator; readonly clock: Clock; readonly adapter: string }): unknown {
+  const media = message.kind === "audio" ? message.media : undefined;
   return {
     contractVersion: CONTRACT_VERSION,
     id: deps.ids(),
     source: { provider: route.provider, accountId: route.accountId, conversationId: route.conversationId, externalMessageId: message.id },
     sender: { externalId: participantExternalId(message), displayName: participantDisplayName(message) },
     timestamp: message.sentAt.toISOString(),
-    kind: "text",
-    text: message.text,
+    ...(media ? { kind: "audio" } : { kind: "text", text: message.text }),
     isForwarded: false,
-    attachments: [],
+    attachments: media ? [audioAttachment(message.id, media)] : [],
     provenance: { captureMethod: "live", capturedAt: deps.clock.now().toISOString(), adapter: deps.adapter },
+  };
+}
+
+function audioAttachment(id: string, media: NonNullable<IncomingGroupMessage["media"]>) {
+  return {
+    id: `${id}:0`,
+    mimeType: media.mimeType,
+    fetchRef: media.fetchRef,
+    ...(media.sizeBytes === undefined ? {} : { sizeBytes: media.sizeBytes }),
+    ...(media.seconds === undefined ? {} : { durationSeconds: media.seconds }),
   };
 }
 
@@ -69,6 +80,8 @@ export interface GroupCaptureDeps {
   readonly adapter: string;
   readonly inbound: () => InboundHandler | undefined;
   readonly onError: () => void;
+  /** Tipos de mídia que viram mensagem (feature 005); fora daqui, mídia é contada e descartada. Padrão: nenhum. */
+  readonly mediaKinds?: readonly DirectKind[];
 }
 
 /** Filtros na ordem da regra: autorização, corte da autorização, tipo; depois contrato e ingestão. */
@@ -83,8 +96,11 @@ export function createGroupCapture(deps: GroupCaptureDeps) {
     return route;
   }
 
-  function isText(message: IncomingGroupMessage): boolean {
+  const mediaKinds = new Set(deps.mediaKinds ?? []);
+
+  function isCapturable(message: IncomingGroupMessage): boolean {
     if (message.kind === "text" && message.text) return true;
+    if (message.kind === "audio" && message.media && mediaKinds.has("audio")) return true;
     deps.observer.captureDiscarded("media");
     deps.observer.captureIgnoredMedia(message.kind);
     return false;
@@ -99,7 +115,7 @@ export function createGroupCapture(deps: GroupCaptureDeps) {
   return async (message: IncomingGroupMessage): Promise<void> => {
     try {
       const route = await routeOf(message);
-      if (!route || !isText(message)) return;
+      if (!route || !isCapturable(message)) return;
       const valid = validateCanonicalMessage(toLiveCanonical(message, route, deps));
       if (!valid.ok) {
         deps.observer.captureDiscarded("invalid");

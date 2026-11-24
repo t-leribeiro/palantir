@@ -30,8 +30,10 @@ export function createOtelMetrics(): AppMetrics {
 const tracer = trace.getTracer("palantir");
 
 /** Executa `work` dentro de um span; erros marcam o span e são repassados. */
-export async function withSpan<T>(name: string, work: () => Promise<T>): Promise<T> {
+/** Span com atributos opcionais (feature 005: motor e modelo da transcrição); nunca conteúdo. */
+export async function withSpan<T>(name: string, work: () => Promise<T>, attributes: Readonly<Record<string, string | number>> = {}): Promise<T> {
   return tracer.startActiveSpan(name, async (span) => {
+    span.setAttributes(attributes);
     try {
       return await work();
     } catch (error) {

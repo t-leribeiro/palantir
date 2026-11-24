@@ -30,6 +30,15 @@ A fatia S2 (feature `003`) acrescentou `outcome: "help"` ao `AgentReply`: ajuda 
 
 A fatia S3 (feature `004`) acrescentou `reconciled` ao `IngestOutcome` (tipo TypeScript da porta, fora dos schemas): a mensagem chegou pelo outro caminho (ao vivo × importada), casou com uma já gravada e ganhou a chave e a proveniência que faltavam, sem novo registro. A rota de teste responde `200` com `outcome: "reconciled"`. `CanonicalMessage` e `AgentReply` não mudaram: o contrato continua 1.2.0. O canal WhatsApp com papel de captura passa a declarar `supportsLiveCapture: true` e roda os testes de captura da suíte de contrato.
 
+## Atualização 2026-11-23: contrato 1.3.0, mídia
+
+A fatia S4 (feature `005`) levou o contrato a **1.3.0**, aditivo:
+- `KnowledgeChannel.fetchMedia(fetchRef)` baixa o binário de um anexo anunciado (o núcleo só chama depois de conferir a autorização) e falha com `MediaUnavailableError`;
+- o anexo da `CanonicalMessage` ganha `sha256`, `durationSeconds`, `status` (`stored` ou `unavailable`) e `unavailableReason`, e `kind = audio` exige anexo;
+- a `Citation` ganha `kind`, `audioStartS` e `audioEndS`.
+
+O canal de teste e o WhatsApp declaram `supportsMedia: true` e rodam os testes de mídia da suíte de contrato. Mensagens 1.0.0 a 1.2.0 continuam válidas.
+
 ## Consequências
 
 - Positivas: novo canal sem mudar o núcleo nem o banco; outros adaptadores (até em outra linguagem) podem usar os mesmos schemas.

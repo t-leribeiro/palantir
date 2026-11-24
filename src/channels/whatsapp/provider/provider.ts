@@ -31,6 +31,17 @@ export interface IncomingGroupMessage {
   readonly kind: DirectKind;
   readonly text?: string;
   readonly sentAt: Date;
+  /** Mídia anunciada (feature 005, D-18): o arquivo só é baixado por `downloadMedia`, depois da autorização. */
+  readonly media?: IncomingMedia;
+}
+
+export interface IncomingMedia {
+  readonly mimeType: string;
+  /** Duração informada pelo WhatsApp (áudio e vídeo). */
+  readonly seconds?: number;
+  readonly sizeBytes?: number;
+  /** Referência para `downloadMedia`; vale por pouco tempo (15 min, 500 mensagens). */
+  readonly fetchRef: string;
 }
 
 /** Grupo como o número o vê: nome e quantidade de participantes, sem pessoas. */
@@ -53,4 +64,6 @@ export interface WhatsAppProvider {
   /** Grupos do número; `complete` = lista inteira (quem não está nela saiu). */
   onGroupsChanged(listener: (groups: readonly GroupInfo[], complete: boolean) => void): void;
   listGroups(): Promise<readonly GroupInfo[]>;
+  /** Baixa a mídia anunciada (feature 005); `MediaUnavailableError("expired")` se a referência caducou. */
+  downloadMedia(fetchRef: string): Promise<Uint8Array>;
 }

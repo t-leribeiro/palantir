@@ -39,6 +39,11 @@ describe("importWhatsAppExport", () => {
       systemIgnored: 3,
       mediaFound: 2,
       unrecognizedLines: 0,
+      audiosLinked: 0,
+      audiosMissing: 0,
+      audiosCaptioned: 0,
+      audiosQueued: 0,
+      otherMedia: 2,
     });
     const diego = [...stored.values()].find((m) => m.sender.displayName === "Diego");
     expect(diego).toMatchObject({

@@ -73,6 +73,8 @@ export interface WhatsAppChannelOptions {
   /** Padrão: só responder (S2). Com `capture`, `capturePorts` é obrigatório. */
   readonly roles?: WhatsAppRoles;
   readonly capturePorts?: CapturePorts;
+  /** Tipos de mídia de grupo que viram mensagem (feature 005; vem de PALANTIR_MEDIA_STORE_KINDS). */
+  readonly captureMediaKinds?: readonly DirectKind[];
 }
 
 export interface WhatsAppChannel extends KnowledgeChannel {
@@ -82,7 +84,7 @@ export interface WhatsAppChannel extends KnowledgeChannel {
 const capabilitiesFor = (roles: WhatsAppRoles): ChannelCapabilities => ({
   supportsLiveCapture: roles.capture,
   supportsHistory: false,
-  supportsMedia: false,
+  supportsMedia: true,
   maxMessageLength: WHATSAPP_MAX_MESSAGE_LENGTH,
 });
 
@@ -151,7 +153,8 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
       kind: CONTRACT_KIND[message.kind],
       ...(message.kind === "text" && message.text ? { text: message.text } : {}),
       isForwarded: false,
-      attachments: [],
+      // Contrato 1.3.0: áudio exige anexo. Ao agente, áudio ainda não é baixado (RN-09 da 005, S8 decide).
+      attachments: message.kind === "audio" ? [{ id: `${message.id}:0`, mimeType: "audio/ogg" }] : [],
       provenance: { captureMethod: "forwarded_to_agent", capturedAt: clock.now().toISOString(), adapter: WHATSAPP_ADAPTER },
     };
   }
@@ -227,7 +230,16 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
 
   if (capturePorts) {
     provider.onGroupMessage(
-      createGroupCapture({ ports: capturePorts, observer, ids, clock, adapter: WHATSAPP_ADAPTER, inbound: () => onInbound, onError: () => observer.handlerFailed() }),
+      createGroupCapture({
+        ports: capturePorts,
+        observer,
+        ids,
+        clock,
+        adapter: WHATSAPP_ADAPTER,
+        inbound: () => onInbound,
+        onError: () => observer.handlerFailed(),
+        mediaKinds: options.captureMediaKinds ?? [],
+      }),
     );
     provider.onGroupsChanged((groups, complete) => {
       capturePorts.syncGroups(groups, complete).catch(() => observer.handlerFailed());
@@ -259,6 +271,10 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
     },
     async sendReply(destinationAccountId, reply) {
       await deliver(toChatJid(destinationAccountId), reply);
+    },
+    /** O núcleo só chama depois de conferir a autorização (D-03); a referência vale por pouco tempo. */
+    async fetchMedia(fetchRef) {
+      return { bytes: await provider.downloadMedia(fetchRef), mimeType: "application/octet-stream" };
     },
     state: () => current,
   };

@@ -2,12 +2,12 @@
 
 Personal Knowledge Agent: transforma conversas dispersas (grupos do WhatsApp, incluindo áudios) em uma memória pesquisável, consultada pelo próprio canal, com a fonte de cada resposta. WhatsApp-first, not WhatsApp-only.
 
-Estado: **S3 entregue** (feature `004`): um grupo de teste autorizado, com consentimento declarado, é capturado ao vivo e aparece nas respostas em segundos, sem duplicar o histórico importado (S1). Por enquanto o próprio número do agente (S2) captura. Áudios e busca semântica vêm nas próximas fatias.
+Estado: **S4 implementada** (feature `005`): áudios importados e capturados ao vivo são guardados cifrados, transcritos localmente (Whisper em CPU, motor substituível) e citados com a duração e o ponto do trecho. Demonstração manual pendente. A S3 (captura ao vivo de um grupo de teste autorizado) está entregue. Busca semântica vem na S6.
 
 - Produto: [`_reversa_sdd/prd.md`](_reversa_sdd/prd.md) e specs em [`_reversa_sdd/sdd/`](_reversa_sdd/sdd/)
 - Plano e status das entregas: [`docs/plano-de-fatias.md`](docs/plano-de-fatias.md)
 - Decisões de arquitetura: [`docs/adr/`](docs/adr/README.md)
-- Feature atual: [`_reversa_forward/004-captura-ao-vivo-grupo-teste/`](_reversa_forward/004-captura-ao-vivo-grupo-teste/)
+- Feature atual: [`_reversa_forward/005-perguntar-sobre-audios/`](_reversa_forward/005-perguntar-sobre-audios/)
 
 ## Pré-requisitos
 
@@ -39,6 +39,8 @@ Perguntar pelo WhatsApp (S2): cadastre seu número com `npm run whatsapp:link --
 
 Capturar um grupo de teste ao vivo (S3): ligue `PALANTIR_WHATSAPP_CAPTURE=agent` no `.env`, adicione o chip ao grupo, rode `npm run dev:whatsapp` e `npm run dev:worker`, e autorize com `npm run whatsapp:grupos -- autorizar <número> --consentimento "<como os participantes foram avisados>" [--conversa "<nome da importação>"]` (o chip precisa ser membro do grupo; nome do grupo diferente do `--conversa` exige `--confirmar`) (roteiro em [`onboarding.md` da 004](_reversa_forward/004-captura-ao-vivo-grupo-teste/onboarding.md)).
 
+Perguntar sobre áudios (S4): o `npm run setup` sobe o motor de transcrição e gera `PALANTIR_MEDIA_KEY`; baixe os modelos com `npm run transcricao:modelos -- <id>`, meça com `npm run eval:transcricao` (preparar, fleurs, medir) e escolha `PALANTIR_TRANSCRIBER_MODEL`; importe o export **com mídias** e pergunte "em qual áudio falaram de X?" (roteiro em [`onboarding.md` da 005](_reversa_forward/005-perguntar-sobre-audios/onboarding.md); decisões no [ADR-0010](docs/adr/0010-transcricao-local-substituivel.md)).
+
 Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`onboarding.md`](_reversa_forward/001-walking-skeleton/onboarding.md). `npm run teardown` destrói o ambiente.
 
 ## Comandos
@@ -59,6 +61,9 @@ Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`
 | `npm run whatsapp:link -- "<número>"` | Cadastra o número pessoal na conta WhatsApp do dono (sem código nesta fatia) |
 | `npm run dev:whatsapp` | Processo do número do agente; desligado por padrão (`PALANTIR_WHATSAPP_ENABLED`); captura de grupos com `PALANTIR_WHATSAPP_CAPTURE` (`off`, `agent`, `dedicated`) |
 | `npm run whatsapp:grupos -- [listar \| autorizar <grupo> --consentimento "<texto>" [--conversa "<nome>"] \| revogar <grupo>]` | Lista, autoriza (com consentimento) e revoga a captura de grupos; lê só do banco |
+| `npm run transcricao:modelos -- <id> [<id>...]` | Baixa modelos no motor de transcrição local (ex.: `deepdml/faster-whisper-large-v3-turbo-ct2`) |
+| `npm run eval:transcricao -- <preparar <export.zip> \| fleurs \| medir --modelos <ids>>` | Mede os modelos (WER, tempo real, memória) em `exports/medicao/`; a saída só tem números |
+| `npm run media:conferir` | Confere que os áudios guardados estão cifrados e decifram com a chave do `.env` |
 | `npm run eval` | Conjunto de avaliação (`eval/cases.json`): acertos, citações, "não encontrei" |
 | `npm run security` | Semgrep, OSV-Scanner e gitleaks; falha em achado crítico ou alto |
 | `npm run dor` | Todos os itens automáticos da DoR, localmente |

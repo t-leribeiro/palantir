@@ -69,6 +69,47 @@ export function createPgMessageStore(db: Queryable): MessageStore {
       return rows.map((r) => ({ id: r.id, sentAt: new Date(r.sent_at), text: r.text, authorName: r.display_name ?? undefined }));
     },
 
+    async audioReconcileCandidates({ sourceId, direction, from, to, sha256 }) {
+      const missing = MISSING_KEY[direction];
+      const { rows } = await db.query<{ id: string; sent_at: Date; display_name: string | null }>(
+        `SELECT m.id, m.sent_at, p.display_name
+           FROM messages m
+           JOIN participants p ON p.id = m.participant_id
+           JOIN attachments a ON a.message_id = m.id
+          WHERE m.source_id = $1 AND m.kind = 'audio' AND m.sent_at BETWEEN $2 AND $3
+            AND a.source_id = $1 AND a.sha256 = $4
+            AND m.${missing.empty} IS NULL AND m.${missing.present} IS NOT NULL
+          ORDER BY m.sent_at, m.id
+          FOR UPDATE OF m`,
+        [sourceId, from, to, sha256],
+      );
+      return rows.map((r) => ({ id: r.id, sentAt: new Date(r.sent_at), authorName: r.display_name ?? undefined }));
+    },
+
+    async insertAttachment(messageId, a, processing) {
+      const { rows } = await db.query<{ id: string }>(
+        `INSERT INTO attachments (message_id, space_id, source_id, media_kind, mime_type, size_bytes, sha256, storage_key,
+                                  duration_s, storage_status, unavailable_reason, processing_status)
+         SELECT m.id, m.space_id, m.source_id, $2, $3, $4, $5, $6, $7, $8, $9, $10 FROM messages m WHERE m.id = $1
+         RETURNING id`,
+        [
+          messageId,
+          a.mediaKind,
+          a.mimeType,
+          a.sizeBytes ?? null,
+          a.sha256 ?? null,
+          a.storageKey ?? null,
+          a.durationSeconds ?? null,
+          a.storageStatus,
+          a.unavailableReason ?? null,
+          processing,
+        ],
+      );
+      const id = rows[0]?.id;
+      if (!id) throw new Error("Falha ao gravar o anexo da mensagem.");
+      return id;
+    },
+
     async attachReconciled(messageId, message, direction) {
       const missing = MISSING_KEY[direction];
       const value = direction === "import_to_live" ? message.importKey : message.externalMessageId;
