@@ -20,7 +20,7 @@ function assertKey(key: Buffer): void {
 
 export function seal(plain: Uint8Array, key: Buffer, iv: Buffer = randomBytes(IV_BYTES)): Buffer {
   assertKey(key);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const cipher = createCipheriv("aes-256-gcm", key, iv, { authTagLength: TAG_BYTES });
   const body = Buffer.concat([cipher.update(plain), cipher.final()]);
   return Buffer.concat([Buffer.from([ENVELOPE_VERSION]), iv, body, cipher.getAuthTag()]);
 }
@@ -32,7 +32,8 @@ export function open(sealed: Uint8Array, key: Buffer): Buffer {
   const iv = data.subarray(1, 1 + IV_BYTES);
   const tag = data.subarray(data.length - TAG_BYTES);
   const body = data.subarray(1 + IV_BYTES, data.length - TAG_BYTES);
-  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  // Tag de tamanho fixo: sem isso, uma tag mais curta poderia ser aceita (Semgrep gcm-no-tag-length).
+  const decipher = createDecipheriv("aes-256-gcm", key, iv, { authTagLength: TAG_BYTES });
   decipher.setAuthTag(tag);
   try {
     return Buffer.concat([decipher.update(body), decipher.final()]);

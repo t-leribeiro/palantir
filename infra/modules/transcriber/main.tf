@@ -39,6 +39,8 @@ resource "docker_container" "this" {
   image   = docker_image.this.image_id
   restart = "unless-stopped"
   memory  = var.memory_mb
+  # O Docker aplica 2× a memória como swap quando não é informado; explícito, o segundo plan não vê diferença.
+  memory_swap = var.memory_mb * 2
 
   env = [
     "WHISPER__COMPUTE_TYPE=int8",
