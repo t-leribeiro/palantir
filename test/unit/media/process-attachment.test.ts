@@ -56,6 +56,7 @@ function setup(bytes: Uint8Array, overrides: Partial<AttachmentForProcessing> = 
     putIfAbsent: async () => ({ created: true }),
     get: async () => bytes,
     exists: async () => true,
+    deletePrefix: async () => 0,
   };
   const observer: MediaObserver = {
     processed: (kind, outcome, details) => observed.push(`${kind}:${outcome}${details?.reason ? `:${details.reason}` : ""}`),
@@ -153,7 +154,7 @@ describe("processAttachment", () => {
             enqueueIndex: async () => undefined,
           }),
       },
-      store: { ensureBucket: async () => undefined, putIfAbsent: async () => ({ created: true }), get: async () => syntheticOpus(saying("x", 2)), exists: async () => true },
+      store: { ensureBucket: async () => undefined, putIfAbsent: async () => ({ created: true }), get: async () => syntheticOpus(saying("x", 2)), exists: async () => true, deletePrefix: async () => 0 },
       processors: [createAudioProcessor(createFakeTranscriber())],
     });
     expect(await raced(job, { lastAttempt: false })).toBe("skipped");

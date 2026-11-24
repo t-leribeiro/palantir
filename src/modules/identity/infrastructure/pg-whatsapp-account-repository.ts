@@ -31,15 +31,20 @@ export function createPgWhatsAppAccountRepository(db: Queryable): WhatsAppAccoun
       );
       return toAccount(rows[0]);
     },
-    async activate(accountId, externalAccountId) {
-      await db.query("UPDATE channel_accounts SET external_account_id = $2, status = 'active' WHERE id = $1", [accountId, externalAccountId]);
-    },
-    async create(userId, externalAccountId) {
-      await db.query("INSERT INTO channel_accounts (user_id, provider, external_account_id, status) VALUES ($1, $2, $3, 'active')", [
-        userId,
-        WHATSAPP_PROVIDER,
+    async setPending(accountId, externalAccountId) {
+      await db.query("UPDATE channel_accounts SET external_account_id = $2, status = 'pending', verified_at = NULL WHERE id = $1", [
+        accountId,
         externalAccountId,
       ]);
+    },
+    async create(userId, externalAccountId) {
+      const { rows } = await db.query<{ id: string }>(
+        "INSERT INTO channel_accounts (user_id, provider, external_account_id, status) VALUES ($1, $2, $3, 'pending') RETURNING id",
+        [userId, WHATSAPP_PROVIDER, externalAccountId],
+      );
+      const id = rows[0]?.id;
+      if (!id) throw new Error("o banco não devolveu o id da conta");
+      return id;
     },
     async countSources(accountId) {
       const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM sources WHERE channel_account_id = $1", [accountId]);

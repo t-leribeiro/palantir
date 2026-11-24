@@ -9,7 +9,7 @@ import type { IncomingDirect } from "../../src/channels/whatsapp/provider/provid
 import { buildWhatsApp, startWorker, type WhatsAppHandle, type WorkerHandle } from "../../src/main/compose.js";
 import { runImport } from "../../src/main/import.js";
 import { seedOperator } from "../../src/main/seed-data.js";
-import { runLink } from "../../src/main/whatsapp-link.js";
+import { linkVerified } from "../support/link.js";
 import { HELP_TEXT, TEXT_ONLY_TEXT } from "../../src/modules/agent/index.js";
 import { loadConfig } from "../../src/platform/config.js";
 import { createLogger } from "../../src/platform/logging/logger.js";
@@ -53,7 +53,7 @@ beforeAll(async () => {
   const config = loadConfig({ DATABASE_URL: db.url, LOG_LEVEL: "error" });
   worker = await startWorker(config, { metrics });
   await runImport({ file: sample, conversation: "Comunidade DevOps", timeZone: "America/Sao_Paulo", owner: OWNER }, db.pool, db.url);
-  await runLink({ number: "+55 11 98888-7777", owner: OWNER }, db.pool);
+  await linkVerified({ number: "+55 11 98888-7777", owner: OWNER }, db.pool);
   provider = createSimulatedProvider();
   whatsapp = await buildWhatsApp(config, { provider, metrics, logger });
 });

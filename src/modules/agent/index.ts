@@ -22,5 +22,6 @@ export {
   type IdentityResolver,
   type UnknownSenderPolicy,
 } from "./application/ask-question.js";
+export { AGENT_NOTIFY_QUEUE, type AgentNotifyJob } from "./domain/notification.js";
 export type { InboundReceipts } from "./application/inbound-receipts.js";
 export { createPgInboundReceipts } from "./infrastructure/pg-inbound-receipts.js";

@@ -32,11 +32,14 @@ import { createLogger, type Logger } from "../platform/logging/logger.js";
 import { createJobQueue, type JobQueue, type QueueDefinition } from "../platform/queue/index.js";
 import { createOtelMetrics, seconds, withSpan, type AppMetrics } from "../platform/telemetry/index.js";
 import { newId } from "../shared/index.js";
+import { AGENT_NOTIFY_QUEUE_DEFINITION, SOURCE_DELETE_QUEUE_DEFINITION } from "./management.js";
 import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, withMediaPreparation } from "./media.js";
 
 export const QUEUES: readonly QueueDefinition[] = [
   { name: INDEX_QUEUE, retryLimit: 5, retryDelaySeconds: 2, expireInSeconds: 60, deadLetter: `${INDEX_QUEUE}.dead` },
   MEDIA_QUEUE_DEFINITION,
+  SOURCE_DELETE_QUEUE_DEFINITION,
+  AGENT_NOTIFY_QUEUE_DEFINITION,
 ];
 
 export interface CompositionOptions {

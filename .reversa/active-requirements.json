@@ -1,16 +1,10 @@
 {
   "schema-version": 1,
-  "feature-dir": "_reversa_forward/005-perguntar-sobre-audios",
-  "feature-id": "005",
-  "short-name": "perguntar-sobre-audios",
-  "started-at": "2026-11-23T22:20:00-03:00",
-  "current-stage": "coding",
-  "stages-completed": [
-    "requirements",
-    "clarify",
-    "plan",
-    "to-do",
-    "coding"
-  ],
+  "feature-dir": "_reversa_forward/006-gerenciar-grupos-pelo-agente",
+  "feature-id": "006",
+  "short-name": "gerenciar-grupos-pelo-agente",
+  "started-at": "2026-11-24T20:30:00-03:00",
+  "current-stage": "requirements",
+  "stages-completed": [],
   "paused-features": []
 }

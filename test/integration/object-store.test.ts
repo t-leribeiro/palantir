@@ -42,4 +42,13 @@ describe("armazenamento de mídia (SeaweedFS)", () => {
     expect(list.status).toBe(403);
     expect(read.status).toBe(403);
   });
+
+  it("feature 006 (D-08): lista paginada e purga só o prefixo da fonte, de forma idempotente", async () => {
+    for (let i = 0; i < 3; i += 1) await store.putIfAbsent(`space-p/source-a/k${i}`, new Uint8Array([i]));
+    await store.putIfAbsent("space-p/source-ab/k0", new Uint8Array([9]));
+    expect([...(await store.listKeys("space-p/"))].sort()).toEqual(["space-p/source-a/k0", "space-p/source-a/k1", "space-p/source-a/k2", "space-p/source-ab/k0"]);
+    expect(await store.deletePrefix("space-p/source-a/")).toBe(3);
+    expect(await store.deletePrefix("space-p/source-a/")).toBe(0);
+    expect(await store.listKeys("space-p/")).toEqual(["space-p/source-ab/k0"]);
+  });
 });

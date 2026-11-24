@@ -12,7 +12,7 @@ import { buildWhatsApp, startWorker, type WhatsAppHandle, type WorkerHandle } fr
 import { runImport } from "../../src/main/import.js";
 import { seedOperator } from "../../src/main/seed-data.js";
 import { parseGroupsArgs, runGroups } from "../../src/main/whatsapp-groups.js";
-import { runLink } from "../../src/main/whatsapp-link.js";
+import { linkVerified } from "../support/link.js";
 import { loadConfig, type AppConfig } from "../../src/platform/config.js";
 import { createLogger } from "../../src/platform/logging/logger.js";
 import { saying, syntheticOpus } from "../support/audio.js";
@@ -95,7 +95,7 @@ beforeAll(async () => {
     S3_SECRET_KEY: s3.secretKey,
   });
   worker = await startWorker(config, { metrics, logger });
-  await runLink({ number: "+55 11 98888-7777", owner: OWNER }, db.pool);
+  await linkVerified({ number: "+55 11 98888-7777", owner: OWNER }, db.pool);
   provider = createSimulatedProvider();
   whatsapp = await buildWhatsApp(config, { provider, metrics, logger });
   provider.setGroups([
