@@ -105,24 +105,39 @@ export interface MeasureResult {
 export const TARGET_WER = 0.2;
 export const TARGET_RTF = 0.5;
 
-/** O mais preciso nos áudios reais (ou no FLEURS, sem reais) entre os que cumprem WER ≤ 20% e tempo real ≤ 0,5. */
+/** Abaixo disso nos reais, a referência é quase igual à saída do modelo: rascunho dele sem correção. */
+export const REFERENCE_BIAS_WER = 0.02;
+
+/** O modelo de que as referências dos áudios reais parecem ter saído, se algum. */
+export function suspectedReferenceModel(results: readonly MeasureResult[]): string | undefined {
+  return results.find((r) => r.set === "real" && r.wer < REFERENCE_BIAS_WER)?.model;
+}
+
+/**
+ * O mais preciso nos áudios reais entre os que cumprem WER ≤ 20% e tempo real ≤ 0,5. Usa o FLEURS
+ * quando não há reais ou quando as referências dos reais parecem ter saído de um dos modelos.
+ */
 export function recommend(results: readonly MeasureResult[]): string | undefined {
   const sets = new Set(results.map((r) => r.set));
-  const decisive = sets.has("real") ? "real" : "fleurs";
+  const decisive = sets.has("real") && suspectedReferenceModel(results) === undefined ? "real" : "fleurs";
   const candidates = results.filter((r) => r.set === decisive && r.wer <= TARGET_WER && r.rtf <= TARGET_RTF);
   return [...candidates].sort((a, b) => a.wer - b.wer || a.rtf - b.rtf)[0]?.model;
 }
 
 const pct = (n: number) => `${(n * 100).toFixed(1).replace(".", ",")}%`;
 const dec = (n: number) => n.toFixed(2).replace(".", ",");
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+const clock = (s: number) => {
+  const total = Math.round(s);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+};
 const gb = (b: number | undefined) => (b === undefined ? "?" : `${(b / 1024 ** 3).toFixed(1).replace(".", ",")} GB`);
 
 /** Tabela só com números (nunca texto de fala nem nome de arquivo). */
 export function formatTable(results: readonly MeasureResult[]): string {
   const width = Math.max(6, ...results.map((r) => r.model.length));
   const header = `${"Modelo".padEnd(width)}  Conjunto  Áudios  Duração  WER     Tempo real  Memória`;
-  const rows = results.map(
+  const ordered = [...results].sort((a, b) => (a.set === b.set ? 0 : a.set === "real" ? -1 : 1));
+  const rows = ordered.map(
     (r) =>
       `${r.model.padEnd(width)}  ${r.set.padEnd(8)}  ${String(r.audios).padStart(6)}  ${clock(r.seconds).padStart(7)}  ${pct(r.wer).padEnd(6)}  ${dec(r.rtf).padStart(10)}  ${gb(r.peakMemoryBytes)}`,
   );
@@ -130,5 +145,12 @@ export function formatTable(results: readonly MeasureResult[]): string {
   const footer = best
     ? `Recomendado: ${best} (o mais preciso com WER ≤ 20% e tempo real ≤ 0,5)`
     : "Nenhum modelo cumpriu WER ≤ 20% e tempo real ≤ 0,5: escolha pelo equilíbrio entre precisão e velocidade.";
-  return [header, ...rows, footer].join("\n");
+  const biased = suspectedReferenceModel(results);
+  const warning = biased
+    ? [
+        `Atenção: ${biased} ficou com WER abaixo de 2% nos áudios reais. As referências parecem ser rascunho dele sem correção,`,
+        "então a WER dos reais mede semelhança com esse modelo, não precisão. A recomendação usou o FLEURS.",
+      ]
+    : [];
+  return [header, ...rows, ...warning, footer].join("\n");
 }

@@ -138,6 +138,35 @@ function sampleMemory(): number | undefined {
   return r.status === 0 ? parseDockerMemory(r.stdout) : undefined;
 }
 
+const mimeOf = (file: string) => (file.endsWith(".wav") ? "audio/wav" : "audio/ogg");
+const IDLE_POLL_MS = 15_000;
+const IDLE_MAX_MS = 15 * 60_000;
+
+/** Espera o motor local descarregar os modelos (GET /api/ps do Speaches). Motor sem essa rota: segue. */
+async function waitEngineIdle(url: string): Promise<void> {
+  const deadline = Date.now() + IDLE_MAX_MS;
+  let announced = false;
+  while (Date.now() < deadline) {
+    const loaded = await loadedModels(url);
+    if (loaded === undefined || loaded === 0) return;
+    if (!announced) console.log("Esperando o motor descarregar o modelo anterior (alguns minutos)...");
+    announced = true;
+    await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS));
+  }
+  console.log("O motor não descarregou o modelo anterior a tempo: tempo e memória deste modelo podem sair distorcidos.");
+}
+
+async function loadedModels(url: string): Promise<number | undefined> {
+  try {
+    const response = await fetch(`${url.replace(/\/+$/, "")}/api/ps`, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return undefined;
+    const body = (await response.json()) as { models?: unknown };
+    return Array.isArray(body.models) ? body.models.length : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function measure(model: string, set: MeasureResult["set"], pairs: readonly Pair[], url: string): Promise<MeasureResult> {
   const transcriber = createOpenAiCompatibleTranscriber({ url, model, minTimeoutMs: 600_000 });
   const counts: WerCount[] = [];
@@ -149,9 +178,12 @@ async function measure(model: string, set: MeasureResult["set"], pairs: readonly
     if (now !== undefined) peak = Math.max(peak ?? 0, now);
   }, 2000);
   try {
+    // Aquecimento fora do cronômetro: a carga do modelo não entra no tempo real.
+    const first = pairs[0];
+    if (first) await transcriber.transcribe({ audio: readFileSync(first.audio), mimeType: mimeOf(first.audio), language: "pt" });
     for (const pair of pairs) {
       const started = performance.now();
-      const result = await transcriber.transcribe({ audio: readFileSync(pair.audio), mimeType: pair.audio.endsWith(".wav") ? "audio/wav" : "audio/ogg", language: "pt" });
+      const result = await transcriber.transcribe({ audio: readFileSync(pair.audio), mimeType: mimeOf(pair.audio), language: "pt" });
       elapsed += (performance.now() - started) / 1000;
       audioSeconds += result.durationSeconds ?? 0;
       counts.push(werCount(pair.reference, result.text));
@@ -169,11 +201,17 @@ async function medir(args: string[]): Promise<void> {
   const sets = values.conjuntos.split(",").map((s) => s.trim()) as MeasureResult["set"][];
   const dirs: Record<MeasureResult["set"], string> = { real: path(REAL_DIR), fleurs: path(FLEURS_DIR) };
   const results: MeasureResult[] = [];
+  const bySet: { set: MeasureResult["set"]; pairs: Pair[] }[] = [];
   for (const set of sets) {
     const { pairs, empty } = pairsIn(dirs[set]);
     if (empty > 0) console.log(`Conjunto ${set}: ${empty} áudio(s) sem transcrição de referência ficaram de fora.`);
-    if (pairs.length === 0) continue;
-    for (const model of values.modelos.split(",").map((m) => m.trim())) results.push(await measure(model, set, pairs, url));
+    if (pairs.length > 0) bySet.push({ set, pairs });
+  }
+  // Um modelo por vez: o motor mantém o anterior carregado por alguns minutos e, juntos, eles passam do
+  // limite de memória do container e caem na swap, o que distorce tempo e memória (medição de 2026-11-24).
+  for (const model of values.modelos.split(",").map((m) => m.trim())) {
+    await waitEngineIdle(url);
+    for (const { set, pairs } of bySet) results.push(await measure(model, set, pairs, url));
   }
   if (results.length === 0) throw new Error("Nenhum par áudio + transcrição encontrado. Rode preparar e/ou fleurs antes.");
   console.log(formatTable(results));

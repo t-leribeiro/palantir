@@ -12,6 +12,7 @@ import {
   pickAudios,
   pickFleurs,
   recommend,
+  suspectedReferenceModel,
   seeded,
   type MeasureResult,
 } from "../../../scripts/transcricao/core.js";
@@ -99,6 +100,26 @@ describe("tabela e recomendação", () => {
     expect(text).toContain("Systran/faster-whisper-small  real          20    18:04  14,2%         0,31  1,1 GB");
     expect(text).toContain("Recomendado: Systran/faster-whisper-small");
     expect(formatTable([r("x", "real", 0.5, 2)])).toContain("Nenhum modelo cumpriu");
+  });
+
+  it("arredonda a duração total sem gerar 60 segundos", () => {
+    expect(formatTable([{ ...r("x", "real", 0.1, 0.3), seconds: 1259.65 }])).toContain("  21:00  ");
+    expect(formatTable([{ ...r("x", "real", 0.1, 0.3), seconds: 59.4 }])).toContain("   0:59  ");
+  });
+
+  it("mostra os reais antes do FLEURS, na ordem de medição", () => {
+    const text = formatTable([r("a", "real", 0.1, 0.3), r("a", "fleurs", 0.1, 0.3), r("b", "real", 0.1, 0.3)]);
+    const lines = text.split("\n").slice(1, 4).map((l) => l.split(/\s+/).slice(0, 2).join(" "));
+    expect(lines).toEqual(["a real", "b real", "a fleurs"]);
+  });
+
+  it("desconfia de referência que saiu de um dos modelos e decide pelo FLEURS", () => {
+    const results = [r("small", "real", 0.12, 0.3), r("turbo", "real", 0.002, 0.4), r("small", "fleurs", 0.08, 0.3), r("turbo", "fleurs", 0.15, 0.6)];
+    expect(suspectedReferenceModel(results)).toBe("turbo");
+    expect(suspectedReferenceModel([r("small", "real", 0.12, 0.3), r("turbo", "fleurs", 0.001, 0.3)])).toBeUndefined();
+    expect(recommend(results)).toBe("small");
+    expect(formatTable(results)).toContain("Atenção: turbo ficou com WER abaixo de 2%");
+    expect(formatTable([r("small", "real", 0.12, 0.3)])).not.toContain("Atenção");
   });
 });
 
