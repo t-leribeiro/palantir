@@ -19,6 +19,8 @@ export interface SweepResult {
   readonly activated: boolean;
   readonly purged: number;
   readonly pending: number;
+  /** O motor falhou num lote (fora do ar ou prazo estourado): o ciclo parou e o próximo tenta de novo. */
+  readonly deferred: boolean;
 }
 
 export type SweepEmbeddings = () => Promise<SweepResult>;
@@ -31,9 +33,9 @@ export function createSweepEmbeddings(deps: EmbedDeps, options: SweepOptions = {
   const observer = deps.observer ?? NOOP_EMBEDDING_OBSERVER;
 
   /** Calcula os pendentes do modelo até acabar, até o prazo ou até o motor falhar. */
-  async function fill(model: RegisteredModel, deadline: number): Promise<number> {
+  async function fill(model: RegisteredModel, deadline: number): Promise<{ embedded: number; deferred: boolean }> {
     const embedder = deps.embedderFor(model);
-    if (!embedder) return 0;
+    if (!embedder) return { embedded: 0, deferred: false };
     let embedded = 0;
     while (now() < deadline) {
       const chunks = await deps.store.pendingChunks(model.id, batchSize);
@@ -43,10 +45,10 @@ export function createSweepEmbeddings(deps: EmbedDeps, options: SweepOptions = {
       } catch (error) {
         if (!(error instanceof EmbedderError)) throw error;
         observer.items("deferred", chunks.length);
-        break;
+        return { embedded, deferred: true };
       }
     }
-    return embedded;
+    return { embedded, deferred: false };
   }
 
   async function completeSwap(model: RegisteredModel): Promise<boolean> {
@@ -60,14 +62,17 @@ export function createSweepEmbeddings(deps: EmbedDeps, options: SweepOptions = {
     const deadline = now() + budgetMs;
     let embedded = 0;
     let activated = false;
+    let deferred = false;
     for (const model of await deps.store.targets()) {
-      embedded += await fill(model, deadline);
+      const filled = await fill(model, deadline);
+      embedded += filled.embedded;
+      deferred = deferred || filled.deferred;
       activated = (await completeSwap(model)) || activated;
     }
     const purged = await deps.store.purgeRetired(purgeLimit);
     const active = await deps.store.activeModel();
     const pending = active ? await deps.store.pendingCount(active.id) : 0;
     observer.pending(pending);
-    return { embedded, activated, purged, pending };
+    return { embedded, activated, purged, pending, deferred };
   };
 }

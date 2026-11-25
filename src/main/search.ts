@@ -179,6 +179,7 @@ export async function startSemanticIndexing(search: SearchConfig, pool: Pool, lo
     try {
       const result = await withSpan("knowledge.embed.sweep", () => sweep());
       if (result.embedded > 0 || result.activated) logger.info({ embedded: result.embedded, pending: result.pending, activated: result.activated }, "varredura de embeddings");
+      if (result.deferred) logger.warn({ pending: result.pending }, "varredura de embeddings adiada: o motor falhou ou estourou o prazo; nova tentativa no próximo ciclo");
     } catch (error) {
       logger.warn({ err: { name: (error as Error).name } }, "varredura de embeddings falhou; nova tentativa no próximo ciclo");
     } finally {

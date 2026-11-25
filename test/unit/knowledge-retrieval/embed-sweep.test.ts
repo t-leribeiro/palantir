@@ -127,7 +127,16 @@ describe("varredura", () => {
     const down = memoryStore(swap, [chunk(1)]);
     const result = await createSweepEmbeddings({ store: down.store, embedderFor: (m) => (m.id === "b" ? createFakeEmbedder({ down: () => true }) : createFakeEmbedder()) })();
     expect(result.activated).toBe(false);
+    expect(result.deferred).toBe(true);
     expect(swap.map((m) => m.status)).toEqual(["active", "building"]);
+  });
+
+  it("informa que adiou quando o motor falha, para o worker não ficar parado em silêncio", async () => {
+    const { store } = memoryStore([model("a", "active")], [chunk(1)]);
+    const slow = createSweepEmbeddings({ store, embedderFor: () => createFakeEmbedder({ down: () => true }) });
+    expect(await slow()).toMatchObject({ embedded: 0, deferred: true, pending: 1 });
+    const ok = createSweepEmbeddings({ store, embedderFor: () => createFakeEmbedder() });
+    expect(await ok()).toMatchObject({ embedded: 1, deferred: false, pending: 0 });
   });
 
   it("modelo sem adaptador na configuração atual fica como está", async () => {

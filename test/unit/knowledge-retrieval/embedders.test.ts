@@ -99,6 +99,20 @@ describe("adaptador openai-compatible", () => {
     });
     await expect(slow.embed(["x"], "query")).rejects.toMatchObject({ reason: "timeout" });
   });
+
+  it("o cálculo do histórico tem prazo próprio, mais longo que o da pergunta (lote de 32 leva ~18 s em CPU)", async () => {
+    const after = (ms: number) =>
+      ((_: unknown, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(new Response(JSON.stringify({ data: [{ index: 0, embedding: [1] }] }), { status: 200 })), ms);
+          init?.signal?.addEventListener("abort", () => (clearTimeout(timer), reject(init.signal?.reason as Error)));
+        })) as typeof fetch;
+    const embedder = createOpenAiCompatibleEmbedder({ url: "http://127.0.0.1:8091", model: "m", dimensions: 1, timeoutMs: 20, documentTimeoutMs: 500, fetch: after(60) });
+    await expect(embedder.embed(["x"], "query")).rejects.toMatchObject({ reason: "timeout" });
+    expect(await embedder.embed(["x"], "document")).toEqual([[1]]);
+    const tight = createOpenAiCompatibleEmbedder({ url: "http://127.0.0.1:8091", model: "m", dimensions: 1, documentTimeoutMs: 20, fetch: after(60) });
+    await expect(tight.embed(["x"], "document")).rejects.toMatchObject({ reason: "timeout" });
+  });
 });
 
 describe("saúde do adaptador openai-compatible", () => {

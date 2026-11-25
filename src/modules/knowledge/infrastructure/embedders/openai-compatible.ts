@@ -14,14 +14,17 @@ export interface OpenAiCompatibleEmbedderOptions {
   readonly requestDimensions?: boolean;
   readonly queryPrefix?: string;
   readonly documentPrefix?: string;
-  /** Prazo de cada chamada (padrão 10 s); a busca passa um `signal` mais curto para a pergunta. */
+  /** Prazo de cada chamada da pergunta (padrão 10 s); a busca passa um `signal` mais curto. */
   readonly timeoutMs?: number;
+  /** Prazo de cada lote do histórico (padrão 120 s): em CPU, 32 trechos do multilingual-e5-base levam ~18 s. */
+  readonly documentTimeoutMs?: number;
   readonly fetch?: typeof fetch;
 }
 
 export const OPENAI_COMPATIBLE_EMBEDDER = "openai-compatible";
 export const MAX_BATCH = 32;
 const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_DOCUMENT_TIMEOUT_MS = 120_000;
 
 interface EmbeddingsResponse {
   readonly model?: string;
@@ -33,6 +36,7 @@ export function createOpenAiCompatibleEmbedder(options: OpenAiCompatibleEmbedder
   const doFetch = options.fetch ?? fetch;
   const headers: Record<string, string> = { "content-type": "application/json", ...(options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {}) };
   const prefixOf = (purpose: EmbedPurpose) => (purpose === "query" ? options.queryPrefix : options.documentPrefix) ?? "";
+  const timeoutOf = (purpose: EmbedPurpose) => (purpose === "query" ? options.timeoutMs : (options.documentTimeoutMs ?? DEFAULT_DOCUMENT_TIMEOUT_MS));
 
   async function batch(texts: readonly string[], purpose: EmbedPurpose, signal?: AbortSignal): Promise<number[][]> {
     const body = {
@@ -41,7 +45,7 @@ export function createOpenAiCompatibleEmbedder(options: OpenAiCompatibleEmbedder
       ...(options.requestDimensions ? { dimensions: options.dimensions } : {}),
     };
     const response = await call(() =>
-      doFetch(`${base}/v1/embeddings`, { method: "POST", headers, body: JSON.stringify(body), signal: signalOf(signal, options.timeoutMs) }),
+      doFetch(`${base}/v1/embeddings`, { method: "POST", headers, body: JSON.stringify(body), signal: signalOf(signal, timeoutOf(purpose)) }),
     );
     if (!response.ok) throw errorOf(response.status);
     const json = (await response.json()) as EmbeddingsResponse;

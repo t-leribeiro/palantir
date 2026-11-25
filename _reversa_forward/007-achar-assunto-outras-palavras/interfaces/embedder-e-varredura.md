@@ -42,7 +42,7 @@ Content-Type: application/json
 | 200 | O resultado é ordenado por `index` e normalizado |
 | 429 | `rate_limited`; a varredura espera o próximo ciclo |
 | 5xx, recusa de conexão | `unavailable` |
-| Prazo estourado | `timeout`: 10 s para lotes de trechos, 1,5 s para a pergunta (D-09) |
+| Prazo estourado | `timeout`: 120 s para lotes de trechos (em CPU, 32 trechos do `multilingual-e5-base` levam ~18 s), 1,5 s para a pergunta (D-09) |
 | 400, 401, 404 | `rejected`, com log sem conteúdo (modelo inexistente, chave errada) |
 
 **Saúde:** `GET {URL}/v1/models` com um prazo de 5 s.
@@ -73,7 +73,7 @@ Authorization: Bearer {PALANTIR_EMBEDDER_API_KEY}
 No job `knowledge.index`, depois de `replaceChunks`:
 
 1. Se `PALANTIR_EMBEDDER=off`, termina.
-2. Calcula o sentido dos trechos da mensagem com o modelo ativo, e com o modelo em construção, se houver (prazo de 10 s).
+2. Calcula o sentido dos trechos da mensagem com o modelo ativo, e com o modelo em construção, se houver (prazo de 120 s).
 3. Grava em `chunk_embeddings`, com `ON CONFLICT DO NOTHING`.
 4. Em qualquer erro do embedder, registra a métrica `embedding_items_total{outcome="deferred"}` e termina. O job continua `completed`, e o trecho fica pendente para a varredura.
 
@@ -97,6 +97,7 @@ No job `knowledge.index`, depois de `replaceChunks`:
 
 **Erros:**
 - Embedder fora do ar: o ciclo termina sem erro, o gauge fica parado, e `EmbedderDown` e `EmbeddingBacklogStalled` avisam.
+- Lote com prazo estourado ou motor fora do ar: o ciclo devolve `deferred: true`, e o worker registra "varredura de embeddings adiada" em log, só com a contagem de pendentes.
 - Banco fora do ar: o job falha, e o próximo ciclo tenta de novo.
 
 **Idempotência:** a PK (`chunk_id`, `model_id`) com `ON CONFLICT DO NOTHING`. Ativar duas vezes não tem efeito, porque o índice único parcial protege.
