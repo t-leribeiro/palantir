@@ -1,9 +1,9 @@
 {
   "schema-version": 1,
-  "feature-dir": "_reversa_forward/006-gerenciar-grupos-pelo-agente",
-  "feature-id": "006",
-  "short-name": "gerenciar-grupos-pelo-agente",
-  "started-at": "2026-11-24T20:30:00-03:00",
+  "feature-dir": "_reversa_forward/007-achar-assunto-outras-palavras",
+  "feature-id": "007",
+  "short-name": "achar-assunto-outras-palavras",
+  "started-at": "2026-11-24T22:45:00-03:00",
   "current-stage": "requirements",
   "stages-completed": [],
   "paused-features": []

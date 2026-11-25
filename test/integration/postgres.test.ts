@@ -179,7 +179,7 @@ describe("indexação e busca", () => {
     const seed = await seedOperator(db.pool);
     const outcome = await ingestor()(msg("fake-group-1", "fal-1", "Ontem o diretor falou na reunião de planejamento"));
     await indexer()({ messageId: (outcome as { messageId: string }).messageId, spaceId: seed.spaceId });
-    expect(await searcher()({ spaceId: seed.spaceId, query: "quem falou de Temporal?" })).toEqual({ results: [], lowConfidence: true });
+    expect(await searcher()({ spaceId: seed.spaceId, query: "quem falou de Temporal?" })).toEqual({ results: [], lowConfidence: true, degraded: false });
   });
 
   it("encontra a mensagem a partir de uma pergunta natural", async () => {
@@ -189,13 +189,13 @@ describe("indexação e busca", () => {
     await indexer()({ messageId: id, spaceId: seed.spaceId });
     const found = await searcher()({ spaceId: seed.spaceId, query: "quem falou do Grafana Alloy?" });
     expect(found.lowConfidence).toBe(false);
-    expect(found.results[0]).toMatchObject({ messageId: id, score: 1 });
+    expect(found.results[0]).toMatchObject({ messageId: id, signals: { lexical: 1 } });
   });
 
   it("sinaliza baixa confiança quando nada casa", async () => {
     const seed = await seedOperator(db.pool);
     const result = await searcher()({ spaceId: seed.spaceId, query: "kubernetes temporal" });
-    expect(result).toEqual({ results: [], lowConfidence: true });
+    expect(result).toEqual({ results: [], lowConfidence: true, degraded: false });
   });
 
   it("isola espaços: conteúdo idêntico de outro usuário nunca aparece", async () => {

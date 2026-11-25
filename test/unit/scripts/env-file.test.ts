@@ -66,3 +66,25 @@ describe("mergeEnv com mídia (feature 005, D-05)", () => {
     expect(merged.PALANTIR_TRANSCRIBE_CONCURRENCY).toBe("2");
   });
 });
+
+describe("mergeEnv com a busca pelo sentido (feature 007, D-03)", () => {
+  const generated = 'PALANTIR_EMBEDDER=openai-compatible\nPALANTIR_EMBEDDER_MODEL=intfloat/multilingual-e5-base\nPALANTIR_EMBEDDER_QUERY_PREFIX="query: "\nPALANTIR_VERIFIER=off\n';
+
+  it("preserva o modelo escolhido na medição, o limiar, os prefixos e a escolha do verificador", () => {
+    const previous = [
+      "PALANTIR_EMBEDDER_MODEL=BAAI/bge-m3",
+      "PALANTIR_EMBEDDER_QUERY_PREFIX=",
+      "PALANTIR_SEMANTIC_MIN_SIMILARITY=0.58",
+      "PALANTIR_VERIFIER=typesafe",
+      "TYPESAFE_API_KEY=CHAVE",
+      "",
+    ].join("\n");
+    const merged = parseEnv(mergeEnv(generated, previous, fixedKey));
+    expect(merged.PALANTIR_EMBEDDER).toBe("openai-compatible");
+    expect(merged.PALANTIR_EMBEDDER_MODEL).toBe("BAAI/bge-m3");
+    expect(merged.PALANTIR_EMBEDDER_QUERY_PREFIX).toBe("");
+    expect(merged.PALANTIR_SEMANTIC_MIN_SIMILARITY).toBe("0.58");
+    expect(merged.PALANTIR_VERIFIER).toBe("typesafe");
+    expect(merged.TYPESAFE_API_KEY).toBe("CHAVE");
+  });
+});

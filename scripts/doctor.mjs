@@ -62,6 +62,51 @@ for (const check of checks) {
   if (!pass) console.log(`      → ${check.hint}`);
 }
 
+// Feature 007: o motor local de embeddings (informativo; não conta como pré-requisito, sobe com npm run setup).
+await checkEmbedder();
+
+async function checkEmbedder() {
+  const env = readEnv();
+  const engine = env.PALANTIR_EMBEDDER || "off";
+  if (engine !== "openai-compatible") {
+    console.log(`info  ${"Embeddings".padEnd(12)} ${engine} (busca pelo sentido ${engine === "off" ? "desligada" : "por serviço externo ou de teste"})`);
+    return;
+  }
+  const url = (env.PALANTIR_EMBEDDER_URL || "http://127.0.0.1:8091").replace(/\/+$/, "");
+  const served = await servedModel(url);
+  console.log(embedderLine(url, served, env.PALANTIR_EMBEDDER_MODEL ?? ""));
+}
+
+async function servedModel(url) {
+  try {
+    const response = await globalThis.fetch(`${url}/info`, { signal: globalThis.AbortSignal.timeout(3_000) });
+    return String((await response.json()).model_id ?? "");
+  } catch {
+    return undefined;
+  }
+}
+
+function embedderLine(url, served, configured) {
+  const label = "Embeddings".padEnd(12);
+  if (served === undefined) return `info  ${label} motor não respondeu em ${url} → rode npm run setup (a busca segue só por palavra)`;
+  if (served.toLowerCase() === configured.toLowerCase()) return `ok    ${label} ${served}`;
+  return `info  ${label} ${served} (o .env pede ${configured}: rode npm run setup)`;
+}
+
+function readEnv() {
+  try {
+    return Object.fromEntries(
+      readFileSync(new URL("../.env", import.meta.url), "utf8")
+        .split(/\r?\n/)
+        .map((line) => /^([A-Z0-9_]+)=(.*)$/.exec(line))
+        .filter(Boolean)
+        .map((m) => [m[1], m[2].replace(/^"(.*)"$/, "$1")]),
+    );
+  } catch {
+    return {};
+  }
+}
+
 if (failed > 0) {
   console.log(`\n${failed} pré-requisito(s) pendente(s). Veja _reversa_forward/001-walking-skeleton/onboarding.md.`);
   process.exit(1);

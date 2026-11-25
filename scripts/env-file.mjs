@@ -19,6 +19,24 @@ export const PRESERVED = [
   "PALANTIR_TRANSCRIBER_ALLOW_REMOTE",
   "PALANTIR_TRANSCRIBER_API_KEY",
   "PALANTIR_TRANSCRIBE_CONCURRENCY",
+  // Busca pelo sentido (feature 007): o modelo escolhido na medição, o limiar e a escolha de serviço online.
+  "PALANTIR_EMBEDDER",
+  "PALANTIR_EMBEDDER_URL",
+  "PALANTIR_EMBEDDER_MODEL",
+  "PALANTIR_EMBEDDER_DIMENSIONS",
+  "PALANTIR_EMBEDDER_REQUEST_DIMENSIONS",
+  "PALANTIR_EMBEDDER_QUERY_PREFIX",
+  "PALANTIR_EMBEDDER_DOCUMENT_PREFIX",
+  "PALANTIR_EMBEDDER_ALLOW_REMOTE",
+  "PALANTIR_EMBEDDER_API_KEY",
+  "PALANTIR_SEMANTIC_MIN_SIMILARITY",
+  "PALANTIR_TYPO_MIN_SIMILARITY",
+  "PALANTIR_TYPO_SEARCH",
+  "PALANTIR_VERIFIER",
+  "PALANTIR_VERIFIER_ALLOW_REMOTE",
+  "PALANTIR_VERIFIER_MODEL",
+  "PALANTIR_VERIFIER_MIN_PROBABILITY",
+  "TYPESAFE_API_KEY",
 ];
 
 /** Chaves geradas quando faltam: a da sessão do WhatsApp (S2) e a dos arquivos de mídia (S4). */
@@ -39,7 +57,8 @@ export function mergeEnv(generated, previous, makeKey = newSessionKey) {
   const old = parseEnv(previous);
   let content = generated;
   for (const name of PRESERVED) {
-    if (old[name]) content = setVar(content, name, old[name]);
+    // Presente no .env anterior vale mesmo vazio: um prefixo vazio é escolha do modelo (feature 007).
+    if (Object.hasOwn(old, name)) content = setVar(content, name, old[name]);
   }
   for (const name of GENERATED_KEYS) {
     if (!parseEnv(content)[name]) content = setVar(content, name, makeKey());

@@ -2,7 +2,7 @@
 
 Personal Knowledge Agent: transforma conversas dispersas (grupos do WhatsApp, incluindo áudios) em uma memória pesquisável, consultada pelo próprio canal, com a fonte de cada resposta. WhatsApp-first, not WhatsApp-only.
 
-Estado: **S5 entregue** (feature `006`): a conta é verificada por código, e os grupos são listados, acompanhados, parados e apagados conversando com o agente; perguntas aceitam o nome do grupo. A S4 (áudios importados e ao vivo guardados cifrados, transcritos localmente com o Whisper `large-v3-turbo` e citados com a duração e o ponto do trecho) e a S3 (captura ao vivo de um grupo autorizado) estão entregues. Busca semântica vem na S6.
+Estado: **S6 implementada** (feature `007`): perguntas com outras palavras ou com erro de digitação acham a mensagem, em texto e em áudio transcrito, com o sentido calculado no próprio computador (trocável por um serviço online por configuração). Demonstração manual pendente. A S5 (conta verificada por código e grupos geridos conversando com o agente), a S4 (áudios transcritos localmente e citados com o ponto do trecho) e a S3 (captura ao vivo de um grupo autorizado) estão entregues.
 
 - Produto: [`_reversa_sdd/prd.md`](_reversa_sdd/prd.md) e specs em [`_reversa_sdd/sdd/`](_reversa_sdd/sdd/)
 - Plano e status das entregas: [`docs/plano-de-fatias.md`](docs/plano-de-fatias.md)
@@ -41,6 +41,8 @@ Capturar um grupo de teste ao vivo (S3): ligue `PALANTIR_WHATSAPP_CAPTURE=agent`
 
 Gerenciar grupos pelo agente (S5): depois de `npm run db:migrate`, a conta pessoal fica pendente até você mandar ao agente o código que `npm run whatsapp:link -- "<número>"` mostra. Pelo WhatsApp, mande `grupos`, `acompanhar <número ou nome>` (confirme com `confirmo`), `parar <nome>` e `apagar <nome>` (confirme com `confirmo apagar <nome>`); perguntas aceitam o nome do grupo ("em qual áudio do T3..."). Roteiro em [`onboarding.md` da 006](_reversa_forward/006-gerenciar-grupos-pelo-agente/onboarding.md); decisões no [ADR-0011](docs/adr/0011-gestao-de-fontes-pelo-agente.md).
 
+Achar o assunto dito com outras palavras (S6): o `npm run setup` sobe o motor local de embeddings (`:8091`) e grava as variáveis `PALANTIR_EMBEDDER*` no `.env`; baixe os candidatos com `npm run busca:modelos`, escreva as perguntas reais com `npm run eval:busca -- preparar` e meça com `npm run eval:busca -- medir`; escolha o modelo e o limiar (`PALANTIR_SEMANTIC_MIN_SIMILARITY`), rode `npm run setup` de novo e reinicie o worker, que calcula o sentido do histórico sozinho. O `npm run eval` compara a busca por palavra com a combinada, por tipo de pergunta. Roteiro em [`onboarding.md` da 007](_reversa_forward/007-achar-assunto-outras-palavras/onboarding.md); decisões no [ADR-0012](docs/adr/0012-busca-por-sentido-local-substituivel.md).
+
 Perguntar sobre áudios (S4): o `npm run setup` sobe o motor de transcrição e gera `PALANTIR_MEDIA_KEY`; baixe os modelos com `npm run transcricao:modelos -- <id>`, meça com `npm run eval:transcricao` (preparar, fleurs, medir) e escolha `PALANTIR_TRANSCRIBER_MODEL` (padrão: `deepdml/faster-whisper-large-v3-turbo-ct2`); importe o export **com mídias** e pergunte "em qual áudio falaram de X?" (roteiro em [`onboarding.md` da 005](_reversa_forward/005-perguntar-sobre-audios/onboarding.md); decisões no [ADR-0010](docs/adr/0010-transcricao-local-substituivel.md)).
 
 Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`onboarding.md`](_reversa_forward/001-walking-skeleton/onboarding.md). `npm run teardown` destrói o ambiente.
@@ -66,6 +68,8 @@ Testar o caminho completo e observar no Grafana (http://localhost:3000): veja [`
 | `npm run auditoria -- [--desde AAAA-MM-DD] [--limite N]` | Mostra a auditoria de vínculos, verificações, autorizações e exclusões, sem conteúdo |
 | `npm run transcricao:modelos -- <id> [<id>...]` | Baixa modelos no motor de transcrição local (ex.: `deepdml/faster-whisper-large-v3-turbo-ct2`) |
 | `npm run eval:transcricao -- <preparar <export.zip> \| fleurs \| medir --modelos <ids>>` | Mede os modelos (WER, tempo real, memória) em `exports/medicao/`; a saída só tem números |
+| `npm run busca:modelos -- [<id>...]` | Baixa modelos de embeddings para o motor local (sem argumentos, os candidatos da medição) |
+| `npm run eval:busca -- <preparar\|medir>` | Prepara as perguntas reais em `exports/medicao/busca/` e mede cada modelo candidato, só com números (S6) |
 | `npm run media:conferir` | Confere que os áudios guardados estão cifrados e decifram com a chave do `.env`, e que não sobrou objeto de conversa apagada |
 | `npm run eval` | Conjunto de avaliação (`eval/cases.json`): acertos, citações, "não encontrei" |
 | `npm run security` | Semgrep, OSV-Scanner e gitleaks; falha em achado crítico ou alto |
