@@ -2,7 +2,7 @@
 
 Personal Knowledge Agent: transforma conversas dispersas (grupos do WhatsApp, incluindo áudios) em uma memória pesquisável, consultada pelo próprio canal, com a fonte de cada resposta. WhatsApp-first, not WhatsApp-only.
 
-Estado: **S5 implementada** (feature `006`): a conta é verificada por código, e os grupos são listados, acompanhados, parados e apagados conversando com o agente; perguntas aceitam o nome do grupo. Demonstração manual pendente. **S4 entregue** (feature `005`): áudios importados e capturados ao vivo são guardados cifrados, transcritos localmente (Whisper `large-v3-turbo` em CPU, motor substituível) e citados com a duração e o ponto do trecho; "em qual áudio..." busca só entre áudios. A S3 (captura ao vivo de um grupo de teste autorizado) está entregue. Busca semântica vem na S6.
+Estado: **S5 entregue** (feature `006`): a conta é verificada por código, e os grupos são listados, acompanhados, parados e apagados conversando com o agente; perguntas aceitam o nome do grupo. A S4 (áudios importados e ao vivo guardados cifrados, transcritos localmente com o Whisper `large-v3-turbo` e citados com a duração e o ponto do trecho) e a S3 (captura ao vivo de um grupo autorizado) estão entregues. Busca semântica vem na S6.
 
 - Produto: [`_reversa_sdd/prd.md`](_reversa_sdd/prd.md) e specs em [`_reversa_sdd/sdd/`](_reversa_sdd/sdd/)
 - Plano e status das entregas: [`docs/plano-de-fatias.md`](docs/plano-de-fatias.md)
