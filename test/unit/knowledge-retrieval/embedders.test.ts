@@ -101,6 +101,22 @@ describe("adaptador openai-compatible", () => {
   });
 });
 
+describe("saúde do adaptador openai-compatible", () => {
+  const healthWith = (ok: Record<string, boolean>) =>
+    createOpenAiCompatibleEmbedder({
+      url: "http://127.0.0.1:8091",
+      model: "m",
+      dimensions: 1,
+      fetch: (async (url: string) => new Response("{}", { status: ok[new URL(url).pathname] ? 200 : 404 })) as unknown as typeof fetch,
+    }).health();
+
+  it("o Text Embeddings Inference responde em /health; a OpenAI, em /v1/models", async () => {
+    expect(await healthWith({ "/health": true })).toBe(true);
+    expect(await healthWith({ "/v1/models": true })).toBe(true);
+    expect(await healthWith({})).toBe(false);
+  });
+});
+
 describe("adaptador voyage", () => {
   it("usa input_type pelo propósito e output_dimension, sem prefixos", async () => {
     const captured: Captured[] = [];

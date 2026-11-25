@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { createPool } from "../src/platform/db/index.js";
 import { DEFAULT_CANDIDATES, formatTable, metricsOf, prefixesFor, rankMessages, scoreQuestion, type Candidate, type ModelRow } from "./busca/core.js";
-import { MEASURE_URL, containerMemory, probeDimensions, startModel, stopMeasureContainer } from "./busca/tei.js";
+import { MEASURE_URL, containerMemory, startModel, stopMeasureContainer } from "./busca/tei.js";
 
 const ROOT = new URL("../exports/medicao/busca/", import.meta.url);
 const QUESTIONS = new URL("perguntas.json", ROOT);
@@ -133,7 +133,8 @@ async function measure(): Promise<void> {
     process.stdout.write(`${model}: carregando... `);
     try {
       await startModel(model);
-      const dims = await probeDimensions();
+      const dims = (await embedAll(["teste"], ""))[0]?.length ?? 0;
+      if (dims === 0) throw new Error("o motor de medição não devolveu vetor");
       if (real) rows.push(await measureSet("real", model, real, dims));
       rows.push(await measureSet("sintetico", model, synthetic, dims));
       console.log("medido");

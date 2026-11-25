@@ -1,6 +1,7 @@
 // Container temporário do Text Embeddings Inference para baixar e medir modelos (feature 007, D-13): um modelo por
 // vez, no mesmo volume de modelos do motor local, numa porta própria. Parar o container descarrega o modelo.
 import { spawnSync } from "node:child_process";
+import { createOpenAiCompatibleEmbedder } from "../../src/modules/knowledge/index.js";
 import { parseDockerMemory } from "../transcricao/core.js";
 
 export const TEI_IMAGE = process.env.PALANTIR_EMBEDDER_IMAGE || "ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4";
@@ -42,11 +43,7 @@ async function waitHealthy(deadline: number): Promise<void> {
     if (!docker(["inspect", "-f", "{{.State.Running}}", MEASURE_CONTAINER]).out.includes("true")) {
       throw new Error("o motor de medição parou: confira o id do modelo no Hugging Face (o log do container mostra o motivo)");
     }
-    try {
-      if ((await fetch(`${MEASURE_URL}/health`, { signal: AbortSignal.timeout(3_000) })).ok) return;
-    } catch {
-      // ainda baixando ou carregando
-    }
+    if (await measureHealth.health()) return;
     await new Promise((r) => setTimeout(r, 2_000));
   }
   throw new Error("o motor de medição não ficou pronto a tempo");
@@ -57,15 +54,5 @@ export function containerMemory(): number | undefined {
   return stats.ok ? parseDockerMemory(stats.out) : undefined;
 }
 
-/** Dimensão do modelo carregado, com uma chamada de teste. */
-export async function probeDimensions(): Promise<number> {
-  const response = await fetch(`${MEASURE_URL}/v1/embeddings`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ input: ["teste"], model: "medicao" }),
-  });
-  const json = (await response.json()) as { data?: { embedding?: number[] }[] };
-  const dims = json.data?.[0]?.embedding?.length;
-  if (!dims) throw new Error("o motor de medição não devolveu vetor");
-  return dims;
-}
+/** Saúde do motor de medição pelo mesmo adaptador do Palantír (a dimensão não importa para o /health). */
+const measureHealth = createOpenAiCompatibleEmbedder({ url: MEASURE_URL, model: "medicao", dimensions: 1 });

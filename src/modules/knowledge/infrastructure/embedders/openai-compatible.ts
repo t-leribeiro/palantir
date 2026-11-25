@@ -61,13 +61,17 @@ export function createOpenAiCompatibleEmbedder(options: OpenAiCompatibleEmbedder
       return out;
     },
     async health() {
-      try {
-        const response = await doFetch(`${base}/v1/models`, { headers, signal: AbortSignal.timeout(5_000) });
-        await response.body?.cancel();
-        return response.ok;
-      } catch {
-        return false;
+      // O Text Embeddings Inference responde em /health e não tem /v1/models; a OpenAI tem /v1/models.
+      for (const path of ["/health", "/v1/models"]) {
+        try {
+          const response = await doFetch(`${base}${path}`, { headers, signal: AbortSignal.timeout(5_000) });
+          await response.body?.cancel();
+          if (response.ok) return true;
+        } catch {
+          // tenta a próxima rota
+        }
       }
+      return false;
     },
   };
 }
