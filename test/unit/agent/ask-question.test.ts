@@ -162,6 +162,32 @@ describe("questionScope (E001)", () => {
   });
 });
 
+describe("questionScope com nome de conversa (feature 006, RN-11)", () => {
+  const catalog = [
+    { sourceId: "s-t3", title: "T3" },
+    { sourceId: "s-casa", title: "Contas da Casa" },
+    { sourceId: "s-contas", title: "Contas" },
+    { sourceId: "s-fam1", title: "Família" },
+    { sourceId: "s-fam2", title: "família" },
+  ];
+
+  it("o nome completo vira filtro e sai da pergunta, combinado com 'em qual áudio'", () => {
+    expect(questionScope("em qual áudio do T3 falaram de Titanium?", catalog)).toEqual({ query: "em qual do falaram de Titanium?", onlyAudio: true, sourceIds: ["s-t3"] });
+    expect(questionScope("no Contas da Casa, quem falou do aluguel?", catalog)).toEqual({ query: "no , quem falou do aluguel?", onlyAudio: false, sourceIds: ["s-casa"] });
+  });
+
+  it("vale o nome mais longo e só palavra inteira; sem nome, sem filtro", () => {
+    expect(questionScope("quem falou das contas da casa?", catalog).sourceIds).toEqual(["s-casa"]);
+    expect(questionScope("quem falou das contas?", catalog).sourceIds).toEqual(["s-contas"]);
+    expect(questionScope("quem falou de T30?", catalog)).toEqual({ query: "quem falou de T30?", onlyAudio: false });
+    expect(questionScope("quem falou de Kafka?", catalog)).toEqual({ query: "quem falou de Kafka?", onlyAudio: false });
+  });
+
+  it("nome de mais de uma conversa não busca", () => {
+    expect(questionScope("na Família, quem falou do Natal?", catalog)).toEqual({ query: "na , quem falou do Natal?", onlyAudio: false, ambiguousTitle: "Família" });
+  });
+});
+
 describe("validateCitations", () => {
   it("aceita citações presentes nos resultados", () => {
     expect(validateCitations([{ messageId: ALLOY.messageId }], [ALLOY])).toBe(true);

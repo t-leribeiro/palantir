@@ -3,7 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runLink } from "../../src/main/whatsapp-link.js";
 import { seedOperator } from "../../src/main/seed-data.js";
 import { createPgInboundReceipts } from "../../src/modules/agent/index.js";
-import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../../src/modules/identity/index.js";
+import {
+  createPgIdentityRepository,
+  createPgVerificationRepository,
+  createResolveUserByChannelAccount,
+  createVerifyAccountCode,
+} from "../../src/modules/identity/index.js";
 import { createEnsureImportSource, createPgImportSourceRepository } from "../../src/modules/sources/index.js";
 import { startTestDatabase, type TestDatabase } from "../support/postgres.js";
 
@@ -54,7 +59,11 @@ describe("cadastro do número pessoal (T007)", () => {
     const imported = await createEnsureImportSource(createPgImportSourceRepository(db.pool))(operator, "Comunidade DevOps");
 
     const result = await runLink({ number: "+55 11 98888-7777", owner }, db.pool);
-    expect(result).toEqual({ outcome: "linked", phone: "+5511988887777", importedSources: 1 });
+    expect(result).toMatchObject({ outcome: "linked", phone: "+5511988887777", importedSources: 1, needsVerification: true });
+    expect(result.code).toMatch(/^\d{6}$/);
+    // Feature 006 (RN-02): pendente até o código chegar ao agente.
+    expect(await resolve("whatsapp", "+5511988887777")).toBeNull();
+    expect(await createVerifyAccountCode(createPgVerificationRepository(db.pool))(result.accountId, result.code ?? "")).toEqual({ kind: "verified" });
     expect(await resolve("whatsapp", "+5511988887777")).toEqual(operator);
 
     const again = await createEnsureImportSource(createPgImportSourceRepository(db.pool))(operator, "Comunidade DevOps");
@@ -64,7 +73,9 @@ describe("cadastro do número pessoal (T007)", () => {
   });
 
   it("repetir é idempotente e outro dono não consegue o mesmo número", async () => {
-    expect((await runLink({ number: "5511988887777", owner }, db.pool)).outcome).toBe("unchanged");
+    const again = await runLink({ number: "5511988887777", owner }, db.pool);
+    expect(again.outcome).toBe("unchanged");
+    expect(again.code).toBeUndefined();
     await db.pool.query(
       `WITH u AS (INSERT INTO users (display_name) VALUES ('Outra pessoa') RETURNING id),
             s AS (INSERT INTO knowledge_spaces (owner_user_id, kind) SELECT id, 'personal' FROM u)

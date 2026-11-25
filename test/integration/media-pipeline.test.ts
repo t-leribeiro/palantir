@@ -197,6 +197,9 @@ describe("caminho de mídia (feature 005)", () => {
     const index = createPgSearchIndex(db.pool);
     expect((await index.search(spaceId, "Temporal", 5)).map((e) => e.kind).sort()).toEqual(["audio", "text"]);
     expect((await index.search(spaceId, "Temporal", 5, "audio")).map((e) => e.messageId)).toEqual([outcome.messageId]);
+    // Feature 006 (RN-11): o filtro por fonte restringe às conversas citadas.
+    expect(await index.search(spaceId, "Temporal", 5, undefined, ["00000000-0000-0000-0000-000000000000"])).toEqual([]);
+    expect((await index.search(spaceId, "Temporal", 5, "audio", [sourceId])).map((e) => e.messageId)).toEqual([outcome.messageId]);
   });
 
   it("RF-04 e RF-05: o mesmo áudio pela captura e pela importação dá 1 objeto e 1 mensagem reconciliada", async () => {

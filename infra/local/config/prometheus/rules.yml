@@ -37,3 +37,14 @@ groups:
         annotations:
           summary: O motor de transcrição não responde há 5 minutos
           description: Os áudios ficam guardados e pendentes. Rode npm run setup para subir o container do motor de novo.
+  - name: palantir-gestao
+    # Feature 006 (D-16): exclusão de fonte parada. Aparece no painel "Palantír / Gestão".
+    rules:
+      - alert: SourceDeletionStalled
+        expr: max(source_deletion_oldest_seconds) > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Uma exclusão de conversa está em andamento há mais de 30 minutos
+          description: A conversa já não aparece nas respostas, mas os dados ainda não foram apagados. Confira se o worker está no ar (npm run dev:worker) e se o armazenamento de mídia responde (npm run setup). A exclusão tenta de novo sozinha por até 34 h.

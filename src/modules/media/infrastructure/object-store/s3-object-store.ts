@@ -2,9 +2,11 @@
 // Único lugar que importa @aws-sdk/* (regra object-store-isolated).
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   S3ServiceException,
@@ -24,6 +26,8 @@ export interface S3ObjectStoreOptions {
 export interface S3ObjectStore extends ObjectStore {
   /** Bytes como estão gravados (cifrados), para conferência (`media:conferir`) e testes. */
   getRaw(key: string): Promise<Uint8Array>;
+  /** Todas as chaves com o prefixo (paginado), para a purga e a conferência de órfãos. */
+  listKeys(prefix?: string): Promise<readonly string[]>;
 }
 
 export function createS3ObjectStore(options: S3ObjectStoreOptions): S3ObjectStore {
@@ -54,6 +58,24 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): S3ObjectStor
     return out.Body.transformToByteArray();
   }
 
+  async function listKeys(prefix = ""): Promise<readonly string[]> {
+    const keys: string[] = [];
+    let ContinuationToken: string | undefined;
+    do {
+      const page = await client.send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ...(ContinuationToken ? { ContinuationToken } : {}) }));
+      for (const item of page.Contents ?? []) if (item.Key) keys.push(item.Key);
+      ContinuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (ContinuationToken);
+    return keys;
+  }
+
+  // Um DeleteObject por chave: o DeleteObjects em lote exige checksum que o SeaweedFS não confere (feature 006, D-08).
+  async function deletePrefix(prefix: string): Promise<number> {
+    const keys = await listKeys(prefix);
+    for (const Key of keys) await client.send(new DeleteObjectCommand({ Bucket, Key }));
+    return keys.length;
+  }
+
   return {
     async ensureBucket() {
       try {
@@ -73,6 +95,8 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): S3ObjectStor
     },
     exists,
     getRaw,
+    listKeys,
+    deletePrefix,
   };
 }
 

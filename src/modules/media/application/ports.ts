@@ -11,6 +11,8 @@ export interface ObjectStore {
   /** Lê e decifra; lança se a tag não conferir (objeto adulterado ou chave errada). */
   get(key: string): Promise<Uint8Array>;
   exists(key: string): Promise<boolean>;
+  /** Apaga todos os objetos com o prefixo (idempotente); devolve quantos apagou (feature 006, D-08). */
+  deletePrefix(prefix: string): Promise<number>;
 }
 
 export interface TranscribeInput {

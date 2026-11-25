@@ -36,7 +36,17 @@ describe("parseGroupsArgs", () => {
     expect(parseGroupsArgs(["revogar", " 3 "])).toEqual({ action: "revogar", group: "3" });
     expect(() => parseGroupsArgs(["revogar"])).toThrow(UsageError);
     expect(() => parseGroupsArgs(["autorizar"])).toThrow(/uso:/);
-    expect(() => parseGroupsArgs(["apagar", "1"])).toThrow(/uso:/);
+    expect(() => parseGroupsArgs(["apagar", "1"])).toThrow('Para apagar, confirme com --nome "<nome do grupo>".');
+  });
+
+  it("feature 006 (RF-13): apagar exige o grupo e o nome", () => {
+    expect(parseGroupsArgs(["apagar", "4", "--nome", "Projeto X"])).toEqual({
+      action: "apagar",
+      group: "4",
+      name: "Projeto X",
+      owner: { provider: "fake", accountId: "fake-operator" },
+    });
+    expect(() => parseGroupsArgs(["apagar", "--nome", "Projeto X"])).toThrow(/uso:/);
   });
 });
 
@@ -112,9 +122,14 @@ describe("formatResult", () => {
     ).toContain('(fonte nova "Grupo de teste")');
   });
 
+  it("exclusão pedida ou já em andamento", () => {
+    expect(formatResult({ action: "apagar", title: "Projeto X", outcome: "requested" })).toBe('Apagando "Projeto X". Acompanhe com: npm run auditoria');
+    expect(formatResult({ action: "apagar", title: "Projeto X", outcome: "already_deleting" })).toBe('"Projeto X" já está sendo apagado.');
+  });
+
   it("revogação lembra que o que já foi guardado continua", () => {
     expect(formatResult({ action: "revogar", subject: "Grupo de teste" })).toBe(
-      'Captura do grupo "Grupo de teste" revogada. As mensagens já guardadas continuam pesquisáveis (exclusão na S5).',
+      'Captura do grupo "Grupo de teste" revogada. As mensagens já guardadas continuam pesquisáveis; para apagá-las: npm run whatsapp:grupos -- apagar <grupo> --nome "<nome>".',
     );
   });
 });

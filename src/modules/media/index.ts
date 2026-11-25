@@ -13,6 +13,7 @@ export {
   type MediaPolicy,
 } from "./domain/media-policy.js";
 export { aggregateWer, normalizeForWer, werCount, type WerCount } from "./domain/wer.js";
+export { createMediaPurger, sourcePrefix, type SourceMediaPurger } from "./application/purge-source.js";
 export {
   TranscriberError,
   type AttachmentForProcessing,

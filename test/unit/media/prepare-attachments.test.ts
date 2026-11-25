@@ -18,6 +18,7 @@ function memoryStore() {
     },
     get: async (key) => objects.get(key) ?? new Uint8Array(),
     exists: async (key) => objects.has(key),
+    deletePrefix: async () => 0,
   };
   return { store, objects };
 }

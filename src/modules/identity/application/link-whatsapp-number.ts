@@ -1,5 +1,5 @@
 // Cadastro do número pessoal por comando do operador (feature 003: RF-03, RN-03, RN-07; D-08).
-// Sem código de verificação nesta fatia: a verificação pelo WhatsApp entra na S5.
+// Desde a S5 (feature 006, D-11, RN-02) o número fica pendente até o dono mandar ao agente o código de verificação.
 import { DomainError, normalizePhone } from "../../../shared/index.js";
 import type { ChannelAccountStatus } from "../domain/identity.js";
 
@@ -18,16 +18,23 @@ export interface WhatsAppAccountRepository {
   findByExternalId(externalAccountId: string): Promise<WhatsAppAccountRow | null>;
   /** A conta WhatsApp do usuário (a ativa, se houver mais de uma). */
   findForUser(userId: string): Promise<WhatsAppAccountRow | null>;
-  activate(accountId: string, externalAccountId: string): Promise<void>;
-  create(userId: string, externalAccountId: string): Promise<void>;
+  /** Grava o número e deixa a conta pendente, sem verificação, até o código chegar. */
+  setPending(accountId: string, externalAccountId: string): Promise<void>;
+  /** Cria a conta pendente e devolve o id. */
+  create(userId: string, externalAccountId: string): Promise<string>;
   countSources(accountId: string): Promise<number>;
 }
 
 export interface LinkResult {
-  /** `linked`: conta provisória ou nova ativada; `replaced`: número trocado; `unchanged`: nada a fazer. */
-  readonly outcome: "linked" | "replaced" | "unchanged";
+  /**
+   * `linked`: conta provisória ou nova; `replaced`: número trocado; `pending`: mesmo número, ainda sem verificação;
+   * `unchanged`: mesmo número, já verificado. Fora `unchanged`, a conta fica pendente até o código.
+   */
+  readonly outcome: "linked" | "replaced" | "pending" | "unchanged";
   readonly phone: string;
   readonly importedSources: number;
+  readonly accountId: string;
+  readonly needsVerification: boolean;
 }
 
 export type LinkWhatsAppNumber = (userId: string, rawNumber: string) => Promise<LinkResult>;
@@ -41,14 +48,20 @@ export function createLinkWhatsAppNumber(repo: WhatsAppAccountRepository): LinkW
     if (holder && holder.userId !== userId) throw new DomainError("already_linked", "Este número já está cadastrado.");
     const own = await repo.findForUser(userId);
     if (!own) {
-      await repo.create(userId, phone);
-      return { outcome: "linked", phone, importedSources: 0 };
+      const accountId = await repo.create(userId, phone);
+      return { outcome: "linked", phone, importedSources: 0, accountId, needsVerification: true };
     }
+    const importedSources = await repo.countSources(own.id);
     if (own.externalAccountId === phone && own.status === "active") {
-      return { outcome: "unchanged", phone, importedSources: await repo.countSources(own.id) };
+      return { outcome: "unchanged", phone, importedSources, accountId: own.id, needsVerification: false };
     }
-    const outcome = own.externalAccountId.startsWith(PROVISIONAL_PREFIX) ? "linked" : "replaced";
-    await repo.activate(own.id, phone);
-    return { outcome, phone, importedSources: await repo.countSources(own.id) };
+    const outcome = outcomeFor(own, phone);
+    await repo.setPending(own.id, phone);
+    return { outcome, phone, importedSources, accountId: own.id, needsVerification: true };
   };
+}
+
+function outcomeFor(own: WhatsAppAccountRow, phone: string): "linked" | "replaced" | "pending" {
+  if (own.externalAccountId.startsWith(PROVISIONAL_PREFIX)) return "linked";
+  return own.externalAccountId === phone ? "pending" : "replaced";
 }

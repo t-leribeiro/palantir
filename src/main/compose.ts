@@ -32,11 +32,15 @@ import { createLogger, type Logger } from "../platform/logging/logger.js";
 import { createJobQueue, type JobQueue, type QueueDefinition } from "../platform/queue/index.js";
 import { createOtelMetrics, seconds, withSpan, type AppMetrics } from "../platform/telemetry/index.js";
 import { newId } from "../shared/index.js";
+import { AGENT_NOTIFY_QUEUE_DEFINITIONS, SOURCE_DELETE_QUEUE_DEFINITION, buildAgentManagement, startDeletionWorker } from "./management.js";
+import { startDeletionNotices } from "./notify.js";
 import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, withMediaPreparation } from "./media.js";
 
 export const QUEUES: readonly QueueDefinition[] = [
   { name: INDEX_QUEUE, retryLimit: 5, retryDelaySeconds: 2, expireInSeconds: 60, deadLetter: `${INDEX_QUEUE}.dead` },
   MEDIA_QUEUE_DEFINITION,
+  SOURCE_DELETE_QUEUE_DEFINITION,
+  ...AGENT_NOTIFY_QUEUE_DEFINITIONS,
 ];
 
 export interface CompositionOptions {
@@ -70,21 +74,28 @@ export interface ApiHandle {
   close(): Promise<void>;
 }
 
-/** Agente com identidade, busca e resposta determinística (ADR-0007); a política vem do canal. */
-function buildAsk(config: AppConfig, pool: Pool, unknownSender: UnknownSenderPolicy) {
+/**
+ * Agente com identidade, busca e resposta determinística (ADR-0007); a política vem do canal. Desde a feature 006,
+ * com verificação de conta, comandos de gestão e filtro por grupo na pergunta.
+ */
+function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender: UnknownSenderPolicy) {
   const search = createSearchEvidence({ index: createPgSearchIndex(pool), lowConfidenceThreshold: config.lowConfidenceThreshold });
+  const management = buildAgentManagement(pool, queue);
   return createAskQuestion({
     identity: { resolve: createResolveUserByChannelAccount(createPgIdentityRepository(pool)) },
     search: { search: (request) => withSpan("retrieval.search", () => search(request)) },
     generator: createDeterministicAnswerGenerator(),
     unknownSender,
+    accounts: management.accounts,
+    manage: management.manage,
+    catalog: management.catalog,
   });
 }
 
 export async function buildApi(config: AppConfig, options: CompositionOptions = {}): Promise<ApiHandle> {
   const { pool, queue, logger, metrics } = await infra(config, options);
   const ingest = buildIngest(pool, queue);
-  const ask = buildAsk(config, pool, "reply");
+  const ask = buildAsk(config, pool, queue, "reply");
 
   const channel = createFakeChannel({ onInvalid: () => metrics.channelInvalid("fake") });
   channel.onMessage((message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))));
@@ -98,6 +109,7 @@ export async function buildApi(config: AppConfig, options: CompositionOptions = 
     }),
   );
   await channel.connect();
+  await startDeletionNotices(pool, queue, "fake", (account, reply) => channel.sendReply(account, reply), logger);
 
   const server = await buildHttpServer({
     logger,
@@ -156,10 +168,12 @@ export async function startWorker(config: AppConfig, options: CompositionOptions
     }),
   );
   const media = await startMediaWorker(config, pool, queue, logger, options.media ?? { observer: createOtelMediaObserver() });
+  const deletions = await startDeletionWorker(config, pool, queue, logger);
   logger.info({ queue: INDEX_QUEUE }, "worker pronto");
   return {
     async close() {
       media.stop();
+      deletions.stop();
       await queue.stop();
       await pool.end();
     },
@@ -205,22 +219,18 @@ function captureState(mode: CaptureMode, agent: WhatsAppChannel, capture: WhatsA
 
 interface CaptureWiring {
   readonly ports: CapturePorts | undefined;
-  readonly queue: JobQueue | undefined;
   /** Entrada da captura para um canal: com mídia, prepara os anexos pelo `fetchMedia` dele (feature 005). */
   readonly ingestFor: ((channel: WhatsAppChannel) => InboundHandler) | undefined;
   readonly mediaKinds: readonly "audio"[];
 }
 
-async function wireCapture(config: AppConfig, pool: Pool, metrics: AppMetrics, logger: Logger): Promise<CaptureWiring> {
-  if (config.whatsapp.capture === "off") return { ports: undefined, queue: undefined, ingestFor: undefined, mediaKinds: [] };
-  const queue = createJobQueue(config.databaseUrl, QUEUES);
-  await queue.start();
+async function wireCapture(config: AppConfig, pool: Pool, queue: JobQueue, metrics: AppMetrics, logger: Logger): Promise<CaptureWiring> {
+  if (config.whatsapp.capture === "off") return { ports: undefined, ingestFor: undefined, mediaKinds: [] };
   const ingest = buildIngest(pool, queue);
   const recorded: InboundHandler = (message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger)));
   const prepare = await withMediaPreparation(config, pool, logger, createOtelMediaObserver());
   return {
     ports: buildCapturePorts(pool),
-    queue,
     ingestFor: (channel) => (prepare ? prepare(recorded, channel) : recorded),
     mediaKinds: prepare ? captureMediaKinds(config.media) : [],
   };
@@ -279,10 +289,13 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   const metrics = options.metrics ?? createOtelMetrics();
   const receipts = createPgInboundReceipts(pool);
   const purged = await receipts.purgeOlderThan(new Date(Date.now() - RECEIPT_RETENTION_MS));
-  const ask = buildAsk(config, pool, "silent");
+  // A fila sempre existe no processo do WhatsApp: ingestão da captura e comandos de exclusão e aviso (D-10).
+  const queue = createJobQueue(config.databaseUrl, QUEUES);
+  await queue.start();
+  const ask = buildAsk(config, pool, queue, "silent");
   const log = { info: (m: string) => logger.info(m), warn: (m: string) => logger.warn(m), error: (m: string) => logger.error(m) };
   const mode = config.whatsapp.capture;
-  const wiring = await wireCapture(config, pool, metrics, logger);
+  const wiring = await wireCapture(config, pool, queue, metrics, logger);
   const channel = buildAgentChannel(options, mode, wiring, receipts, log);
   const captureChannel = mode === "dedicated" ? buildCaptureChannel(options, wiring, receipts, log) : undefined;
   channel.onAgentMessage(answerWith(ask, metrics, logger));
@@ -292,6 +305,7 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   });
   await channel.connect();
   await captureChannel?.connect();
+  await startDeletionNotices(pool, queue, "whatsapp", (account, reply) => channel.sendReply(account, reply), logger);
   logger.info({ purgedReceipts: purged, capture: mode }, "canal WhatsApp iniciado");
   return {
     channel,
@@ -301,7 +315,7 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
       await channel.disconnect();
       await captureChannel?.disconnect();
       await server.close();
-      await wiring.queue?.stop();
+      await queue.stop();
       await pool.end();
     },
   };
