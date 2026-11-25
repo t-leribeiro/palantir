@@ -93,3 +93,4 @@ Devolve p = 0,9 para as candidatas cujo trecho contém um marcador de fixture e 
 > - A chamada é com `fetch`, sem SDK.
 > - A resposta é lida em `answers.cN.noul`.
 > - ADR-0013 (2026-11-25): `state.mensagens[i]` leva só `autor` (apelido) e `texto`; a instrução da noul pede que, em pergunta sobre o que uma pessoa disse, a mensagem seja dessa pessoa.
+> - Demonstração (2026-11-25): com o mínimo de 0,7, o Jev recusou as 30 candidatas de uma pergunta real cuja resposta estava em 5º lugar na fusão (nota 0,51; a mensagem era o título de uma lista mandada como imagem). O `.env` do dono passou a `PALANTIR_VERIFIER_MIN_PROBABILITY=0.5`, de forma provisória; o padrão do código continua 0,7. Calibrar com perguntas reais, ou fazer o verificador só reordenar quando os sinais já têm evidência forte (muda a D-10), fica para uma decisão futura.
