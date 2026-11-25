@@ -6,7 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { mergeEnv } from "./env-file.mjs";
+import { mergeEnv, parseEnv } from "./env-file.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dir = `${root}infra/local`;
@@ -21,6 +21,9 @@ function terraformBin() {
 
 const env = { ...process.env };
 if (process.platform === "win32" && !env.DOCKER_HOST) env.TF_VAR_docker_host = "npipe:////./pipe/docker_engine";
+// Feature 007: o motor local serve o modelo de embeddings escolhido no .env (um modelo por container).
+const currentEnv = existsSync(`${root}.env`) ? parseEnv(readFileSync(`${root}.env`, "utf8")) : {};
+if (currentEnv.PALANTIR_EMBEDDER_MODEL && !env.TF_VAR_embedder_model) env.TF_VAR_embedder_model = currentEnv.PALANTIR_EMBEDDER_MODEL;
 
 function tf(args, capture = false) {
   const r = spawnSync(terraformBin(), [`-chdir=${dir}`, ...args], {

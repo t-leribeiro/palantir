@@ -89,6 +89,20 @@ module.exports = {
       from: { path: "^src/", pathNot: ["^src/modules/media/index\\.ts$", "^src/modules/media/infrastructure/"] },
       to: { path: "^src/modules/media/infrastructure/transcribers/" },
     },
+    {
+      name: "embedder-engine-isolated",
+      comment: "Os adaptadores do cálculo de sentido só são usados pela infraestrutura e pela API pública de knowledge (feature 007, D-01).",
+      severity: "error",
+      from: { path: "^src/", pathNot: ["^src/modules/knowledge/index\\.ts$", "^src/modules/knowledge/infrastructure/"] },
+      to: { path: "^src/modules/knowledge/infrastructure/embedders/" },
+    },
+    {
+      name: "verifier-engine-isolated",
+      comment: "Os adaptadores do verificador externo só são usados pela infraestrutura e pela API pública de retrieval (feature 007, D-10).",
+      severity: "error",
+      from: { path: "^src/", pathNot: ["^src/modules/retrieval/index\\.ts$", "^src/modules/retrieval/infrastructure/"] },
+      to: { path: "^src/modules/retrieval/infrastructure/verifiers/" },
+    },
   ],
   options: {
     doNotFollow: { path: "node_modules" },

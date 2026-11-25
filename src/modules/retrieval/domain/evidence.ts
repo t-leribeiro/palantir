@@ -11,6 +11,15 @@ export interface Evidence {
   readonly audioStartS?: number;
   readonly audioEndS?: number;
   readonly durationSeconds?: number;
+  /** Sinais de cada forma de busca que achou a mensagem (feature 007, D-17): só para a decisão, o eval e os testes. */
+  readonly signals?: EvidenceSignals;
+}
+
+/** Fração de termos (palavra e palavra parecida) e semelhança de cosseno (sentido), de 0 a 1. */
+export interface EvidenceSignals {
+  readonly lexical?: number;
+  readonly typo?: number;
+  readonly semantic?: number;
 }
 
 /** Baixa confiança: nenhum resultado ou melhor score abaixo do limiar (RF-12). */

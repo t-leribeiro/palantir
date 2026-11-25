@@ -1,5 +1,5 @@
 import type { Queryable } from "../../../platform/db/index.js";
-import type { SearchIndex } from "../application/search-evidence.js";
+import type { QueryVector, SearchIndex, SearchKind } from "../application/search-evidence.js";
 import type { Evidence } from "../domain/evidence.js";
 import { QUESTION_FILLER_WORDS } from "../domain/query.js";
 
@@ -52,6 +52,72 @@ SELECT c.message_id, c.text,
  ORDER BY score DESC, ts_rank(c.tsv, q.query) DESC, m.sent_at DESC
  LIMIT $3`;
 
+/** Colunas e junções de citação, comuns às três formas de busca; o filtro do espaço fica em cada uma (RN-02). */
+const CITATION_COLUMNS = `COALESCE(p.display_name, p.external_id) AS author, s.title AS source_title, m.sent_at, m.kind,
+       c.audio_start_s, c.audio_end_s, a.duration_s`;
+const CITATION_JOINS = `JOIN messages m ON m.id = c.message_id
+  JOIN participants p ON p.id = m.participant_id
+  JOIN sources s ON s.id = m.source_id
+  LEFT JOIN attachments a ON a.message_id = m.id`;
+
+/** Palavras de pergunta sem acento, para a busca por palavra parecida (o texto normalizado também não tem). */
+const FILLER_NORMALIZED = [...new Set(QUESTION_FILLER_WORDS.map((w) => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "")))];
+
+/**
+ * Palavra parecida (feature 007, RF-04, D-07): cada palavra da pergunta com 4 letras ou mais, que não seja palavra de
+ * pergunta nem stopword, é comparada por trigramas com a palavra mais parecida do trecho. O sinal é a fração de palavras
+ * encontradas com semelhança ≥ $7 (o operador `<%` usa o índice com o limiar padrão do pg_trgm, 0,6).
+ */
+const TYPO_SQL = `
+WITH words AS (
+  SELECT DISTINCT w
+    FROM regexp_split_to_table(palantir_norm($2), '[^a-z0-9]+') AS w
+   WHERE length(w) >= 4 AND w <> ALL ($4::text[]) AND to_tsvector('palantir_pt', w) <> ''::tsvector
+), total AS (
+  SELECT count(*)::float8 AS n FROM words
+), hits AS (
+  SELECT c.id AS chunk_id, count(DISTINCT w.w)::float8 AS matched
+    FROM words w
+    JOIN message_chunks c ON w.w <% c.text_norm
+   WHERE c.space_id = $1 AND word_similarity(w.w, c.text_norm) >= $7
+   GROUP BY c.id
+)
+SELECT c.message_id, c.text, h.matched / t.n AS score, ${CITATION_COLUMNS}
+  FROM hits h
+  CROSS JOIN total t
+  JOIN message_chunks c ON c.id = h.chunk_id
+  ${CITATION_JOINS}
+ WHERE t.n > 0 AND m.space_id = $1 AND s.status <> 'deleting'
+   AND ($5::text IS NULL OR m.kind = $5)
+   AND ($6::uuid[] IS NULL OR m.source_id = ANY($6))
+ ORDER BY score DESC, m.sent_at DESC, c.message_id
+ LIMIT $3`;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Sentido (feature 007, D-04, D-07): distância de cosseno no modelo ativo, com o mesmo cast e o mesmo filtro de modelo
+ * do índice parcial criado na ativação. Id e dimensão são validados: nada de texto livre entra no SQL.
+ */
+function semanticSql(query: QueryVector): string {
+  if (!UUID.test(query.modelId) || !Number.isInteger(query.dimensions) || query.dimensions < 1 || query.dimensions > 2000) {
+    throw new RangeError("modelo inválido para a busca por sentido");
+  }
+  const cast = `vector(${query.dimensions})`;
+  return `
+SELECT c.message_id, c.text, 1 - ((e.embedding::${cast}) <=> $2::${cast}) AS score, ${CITATION_COLUMNS}
+  FROM chunk_embeddings e
+  JOIN message_chunks c ON c.id = e.chunk_id
+  ${CITATION_JOINS}
+ WHERE e.model_id = '${query.modelId}' AND e.space_id = $1 AND c.space_id = $1 AND m.space_id = $1 AND s.status <> 'deleting'
+   AND ($4::text IS NULL OR m.kind = $4)
+   AND ($5::uuid[] IS NULL OR m.source_id = ANY($5))
+ ORDER BY (e.embedding::${cast}) <=> $2::${cast}, c.message_id
+ LIMIT $3`;
+}
+
+const DEFAULT_TYPO_SIMILARITY = 0.6;
+
 function toEvidence(r: Row): Evidence {
   return {
     messageId: r.message_id,
@@ -66,11 +132,24 @@ function toEvidence(r: Row): Evidence {
   };
 }
 
-export function createPgSearchIndex(db: Queryable): SearchIndex {
-  return {
+const sourcesParam = (sourceIds?: readonly string[]) => (sourceIds ? [...sourceIds] : null);
+
+export function createPgSearchIndex(db: Queryable, options: { readonly typoMinSimilarity?: number; readonly typo?: boolean } = {}): SearchIndex {
+  const index: SearchIndex = {
     async search(spaceId, query, limit, kind, sourceIds): Promise<Evidence[]> {
-      const { rows } = await db.query<Row>(SQL, [spaceId, query, limit, QUESTION_FILLER_WORDS.join(" "), kind ?? null, sourceIds ? [...sourceIds] : null]);
+      const { rows } = await db.query<Row>(SQL, [spaceId, query, limit, QUESTION_FILLER_WORDS.join(" "), kind ?? null, sourcesParam(sourceIds)]);
+      return rows.map(toEvidence);
+    },
+    async typo(spaceId: string, query: string, limit: number, kind?: SearchKind, sourceIds?: readonly string[]): Promise<Evidence[]> {
+      const params = [spaceId, query, limit, FILLER_NORMALIZED, kind ?? null, sourcesParam(sourceIds), options.typoMinSimilarity ?? DEFAULT_TYPO_SIMILARITY];
+      const { rows } = await db.query<Row>(TYPO_SQL, params);
+      return rows.map(toEvidence);
+    },
+    async semantic(spaceId: string, query: QueryVector, limit: number, kind?: SearchKind, sourceIds?: readonly string[]): Promise<Evidence[]> {
+      const { rows } = await db.query<Row>(semanticSql(query), [spaceId, `[${query.vector.join(",")}]`, limit, kind ?? null, sourcesParam(sourceIds)]);
       return rows.map(toEvidence);
     },
   };
+  if (options.typo === false) delete index.typo;
+  return index;
 }

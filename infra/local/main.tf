@@ -19,6 +19,12 @@ variable "docker_host" {
   description = "Endpoint do Docker. No Windows, scripts/infra.mjs passa npipe:////./pipe/docker_engine."
 }
 
+# Modelo de embeddings servido pelo motor local (feature 007): o npm run setup passa o do .env.
+variable "embedder_model" {
+  type    = string
+  default = "intfloat/multilingual-e5-base"
+}
+
 variable "name_prefix" {
   type    = string
   default = "palantir"
@@ -74,6 +80,13 @@ module "transcriber" {
   network_name = docker_network.palantir.name
 }
 
+module "embedder" {
+  source       = "../modules/embedder"
+  name_prefix  = var.name_prefix
+  network_name = docker_network.palantir.name
+  model_id     = var.embedder_model
+}
+
 module "observability" {
   source                 = "../modules/observability"
   name_prefix            = var.name_prefix
@@ -107,6 +120,18 @@ output "s3_secret_key" {
 
 output "transcriber_url" {
   value = module.transcriber.url
+}
+
+output "embedder_url" {
+  value = module.embedder.url
+}
+
+output "embedder_volume" {
+  value = module.embedder.volume
+}
+
+output "embedder_image" {
+  value = module.embedder.image
 }
 
 output "otlp_endpoint" {

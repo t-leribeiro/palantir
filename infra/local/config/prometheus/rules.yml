@@ -48,3 +48,22 @@ groups:
         annotations:
           summary: Uma exclusão de conversa está em andamento há mais de 30 minutos
           description: A conversa já não aparece nas respostas, mas os dados ainda não foram apagados. Confira se o worker está no ar (npm run dev:worker) e se o armazenamento de mídia responde (npm run setup). A exclusão tenta de novo sozinha por até 34 h.
+  - name: palantir-busca
+    # Feature 007 (D-14): cálculo de sentido parado ou fora do ar. Aparecem no painel "Palantír / Busca".
+    rules:
+      - alert: EmbeddingBacklogStalled
+        expr: max(embedding_pending) > 0 and sum(increase(embedding_items_total{outcome="embedded"}[30m])) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: O cálculo de sentido não avança há 30 minutos
+          description: Há trechos sem o sentido calculado e nada foi calculado. A busca segue por palavra. Confira se o worker está no ar (npm run dev:worker) e se o motor responde em http://127.0.0.1:8091/health.
+      - alert: EmbedderDown
+        expr: max(embedder_up) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: O cálculo de sentido não responde há 5 minutos
+          description: As perguntas são respondidas só por palavra (modo degradado) e as mensagens novas ficam pendentes. Rode npm run setup para subir o container do motor de novo.

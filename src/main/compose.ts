@@ -35,6 +35,7 @@ import { newId } from "../shared/index.js";
 import { AGENT_NOTIFY_QUEUE_DEFINITIONS, SOURCE_DELETE_QUEUE_DEFINITION, buildAgentManagement, startDeletionWorker } from "./management.js";
 import { startDeletionNotices } from "./notify.js";
 import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, withMediaPreparation } from "./media.js";
+import { buildSearchParts, startSemanticIndexing, tracedIndex, type SearchCompositionOptions } from "./search.js";
 
 export const QUEUES: readonly QueueDefinition[] = [
   { name: INDEX_QUEUE, retryLimit: 5, retryDelaySeconds: 2, expireInSeconds: 60, deadLetter: `${INDEX_QUEUE}.dead` },
@@ -48,6 +49,8 @@ export interface CompositionOptions {
   readonly metrics?: AppMetrics;
   /** Ganchos do worker de mídia (feature 005): observador de métricas e saúde do motor. */
   readonly media?: Parameters<typeof startMediaWorker>[4];
+  /** Busca pelo sentido (feature 007): cálculo, verificador e observadores injetados por testes e pelo eval. */
+  readonly search?: SearchCompositionOptions;
 }
 
 interface Infra {
@@ -78,8 +81,12 @@ export interface ApiHandle {
  * Agente com identidade, busca e resposta determinística (ADR-0007); a política vem do canal. Desde a feature 006,
  * com verificação de conta, comandos de gestão e filtro por grupo na pergunta.
  */
-function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender: UnknownSenderPolicy) {
-  const search = createSearchEvidence({ index: createPgSearchIndex(pool), lowConfidenceThreshold: config.lowConfidenceThreshold });
+function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender: UnknownSenderPolicy, searchOptions?: SearchCompositionOptions) {
+  const search = createSearchEvidence({
+    index: tracedIndex(createPgSearchIndex(pool, { typoMinSimilarity: config.search.typoMinSimilarity, typo: config.search.typoSearch })),
+    lowConfidenceThreshold: config.lowConfidenceThreshold,
+    ...buildSearchParts(config.search, pool, searchOptions),
+  });
   const management = buildAgentManagement(pool, queue);
   return createAskQuestion({
     identity: { resolve: createResolveUserByChannelAccount(createPgIdentityRepository(pool)) },
@@ -95,7 +102,7 @@ function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender:
 export async function buildApi(config: AppConfig, options: CompositionOptions = {}): Promise<ApiHandle> {
   const { pool, queue, logger, metrics } = await infra(config, options);
   const ingest = buildIngest(pool, queue);
-  const ask = buildAsk(config, pool, queue, "reply");
+  const ask = buildAsk(config, pool, queue, "reply", options.search);
 
   const channel = createFakeChannel({ onInvalid: () => metrics.channelInvalid("fake") });
   channel.onMessage((message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))));
@@ -153,11 +160,13 @@ export interface WorkerHandle {
 export async function startWorker(config: AppConfig, options: CompositionOptions = {}): Promise<WorkerHandle> {
   const { pool, queue, logger, metrics } = await infra(config, options);
   const index = createIndexMessage(createPgChunkRepository(pool));
+  const semantic = await startSemanticIndexing(config.search, pool, logger, options.search);
   await queue.work<IndexRequest>(INDEX_QUEUE, (job) =>
     withSpan("knowledge.index", async () => {
       const started = performance.now();
       try {
         const outcome = await index(job);
+        if (outcome === "indexed") await semantic.afterIndex(job.messageId);
         metrics.job(INDEX_QUEUE, "completed", seconds(started));
         logger.info({ messageId: job.messageId, outcome }, "mensagem indexada");
       } catch (error) {
@@ -174,6 +183,7 @@ export async function startWorker(config: AppConfig, options: CompositionOptions
     async close() {
       media.stop();
       deletions.stop();
+      semantic.stop();
       await queue.stop();
       await pool.end();
     },
@@ -292,7 +302,7 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   // A fila sempre existe no processo do WhatsApp: ingestão da captura e comandos de exclusão e aviso (D-10).
   const queue = createJobQueue(config.databaseUrl, QUEUES);
   await queue.start();
-  const ask = buildAsk(config, pool, queue, "silent");
+  const ask = buildAsk(config, pool, queue, "silent", options.search);
   const log = { info: (m: string) => logger.info(m), warn: (m: string) => logger.warn(m), error: (m: string) => logger.error(m) };
   const mode = config.whatsapp.capture;
   const wiring = await wireCapture(config, pool, queue, metrics, logger);

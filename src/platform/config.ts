@@ -24,6 +24,46 @@ export type StoredMediaKind = (typeof MEDIA_STORE_KINDS)[number];
 export const TRANSCRIBER_ENGINES = ["openai-compatible", "fake"] as const;
 export type TranscriberEngine = (typeof TRANSCRIBER_ENGINES)[number];
 
+/** Busca pelo sentido (feature 007, D-03, D-10): cálculo trocável (local ou online) e verificador opcional. */
+export const EMBEDDER_ENGINES = ["off", "openai-compatible", "voyage", "fake"] as const;
+export type EmbedderEngine = (typeof EMBEDDER_ENGINES)[number];
+export const VERIFIER_ENGINES = ["off", "typesafe", "fake"] as const;
+export type VerifierEngine = (typeof VERIFIER_ENGINES)[number];
+/** Limite do índice HNSW do pgvector para o tipo `vector` (D-04). */
+export const MAX_EMBEDDING_DIMENSIONS = 2000;
+
+export interface EmbedderConfig {
+  readonly engine: EmbedderEngine;
+  readonly url: string;
+  readonly model: string;
+  readonly dimensions: number;
+  /** Pede ao serviço a dimensão configurada (OpenAI `dimensions`, Voyage `output_dimension`). */
+  readonly requestDimensions: boolean;
+  readonly queryPrefix: string;
+  readonly documentPrefix: string;
+  /** RN-05: serviço fora desta máquina só com liberação explícita, porque as mensagens saem dela. */
+  readonly allowRemote: boolean;
+  readonly apiKey: string | undefined;
+}
+
+export interface VerifierConfig {
+  readonly engine: VerifierEngine;
+  readonly allowRemote: boolean;
+  readonly apiKey: string | undefined;
+  readonly model: string;
+  readonly minProbability: number;
+}
+
+export interface SearchConfig {
+  readonly embedder: EmbedderConfig;
+  /** Limiar de sentido (D-08); `undefined` = 0,5 com aviso de que não foi calibrado. */
+  readonly semanticMinSimilarity: number | undefined;
+  readonly typoMinSimilarity: number;
+  /** Busca por palavra parecida (RF-04); `PALANTIR_TYPO_SEARCH=off` volta à busca por palavra da S5. */
+  readonly typoSearch: boolean;
+  readonly verifier: VerifierConfig;
+}
+
 export interface StorageConfig {
   readonly endpoint: string | undefined;
   readonly bucket: string;
@@ -62,6 +102,7 @@ export interface AppConfig {
   readonly logLevel: "debug" | "info" | "warn" | "error";
   readonly whatsapp: WhatsAppConfig;
   readonly media: MediaConfig;
+  readonly search: SearchConfig;
 }
 
 export class ConfigError extends Error {
@@ -83,6 +124,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
   if (!/^postgres(ql)?:\/\//.test(databaseUrl)) problems.push("DATABASE_URL deve ser uma URL postgres://");
   const whatsapp = whatsappConfig(env, problems);
   const media = mediaConfig(env, problems);
+  const search = searchConfig(env, problems);
   if (problems.length > 0) throw new ConfigError(problems);
   return {
     role,
@@ -94,6 +136,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     logLevel,
     whatsapp,
     media,
+    search,
   };
 }
 
@@ -130,6 +173,61 @@ function transcriptionConfig(env: Env, problems: string[]): TranscriptionConfig 
   };
 }
 
+const VOYAGE_URL = "https://ai.mongodb.com";
+
+function searchConfig(env: Env, problems: string[]): SearchConfig {
+  const semantic = present(env, "PALANTIR_SEMANTIC_MIN_SIMILARITY");
+  return {
+    embedder: embedderConfig(env, problems),
+    semanticMinSimilarity: semantic === undefined ? undefined : decimal(semantic, "PALANTIR_SEMANTIC_MIN_SIMILARITY", problems),
+    typoMinSimilarity: decimal(env.PALANTIR_TYPO_MIN_SIMILARITY ?? "0.6", "PALANTIR_TYPO_MIN_SIMILARITY", problems),
+    typoSearch: oneOf(env.PALANTIR_TYPO_SEARCH || "on", ["on", "off"] as const, "PALANTIR_TYPO_SEARCH", problems) === "on",
+    verifier: verifierConfig(env, problems),
+  };
+}
+
+/** Desligado quando não configurado: o setup grava o motor local no .env; testes e eval escolhem o seu. */
+function embedderConfig(env: Env, problems: string[]): EmbedderConfig {
+  const engine = oneOf(env.PALANTIR_EMBEDDER || "off", EMBEDDER_ENGINES, "PALANTIR_EMBEDDER", problems);
+  const allowRemote = env.PALANTIR_EMBEDDER_ALLOW_REMOTE === "true";
+  const url = embedderUrl(env, engine, allowRemote, problems);
+  return {
+    engine,
+    url,
+    model: env.PALANTIR_EMBEDDER_MODEL || "intfloat/multilingual-e5-base",
+    dimensions: integer(env.PALANTIR_EMBEDDER_DIMENSIONS ?? "768", "PALANTIR_EMBEDDER_DIMENSIONS", 1, MAX_EMBEDDING_DIMENSIONS, problems),
+    requestDimensions: env.PALANTIR_EMBEDDER_REQUEST_DIMENSIONS === "true",
+    queryPrefix: env.PALANTIR_EMBEDDER_QUERY_PREFIX ?? "",
+    documentPrefix: env.PALANTIR_EMBEDDER_DOCUMENT_PREFIX ?? "",
+    allowRemote,
+    apiKey: present(env, "PALANTIR_EMBEDDER_API_KEY"),
+  };
+}
+
+function embedderUrl(env: Env, engine: EmbedderEngine, allowRemote: boolean, problems: string[]): string {
+  const url = env.PALANTIR_EMBEDDER_URL || (engine === "voyage" ? VOYAGE_URL : "http://127.0.0.1:8091");
+  if (engine === "openai-compatible") remoteUrl(url, allowRemote, "PALANTIR_EMBEDDER", "as mensagens sairiam dela", problems);
+  if (engine === "voyage" && !allowRemote) problems.push("PALANTIR_EMBEDDER=voyage exige PALANTIR_EMBEDDER_ALLOW_REMOTE=true (as mensagens saem desta máquina)");
+  return url;
+}
+
+function verifierConfig(env: Env, problems: string[]): VerifierConfig {
+  const engine = oneOf(env.PALANTIR_VERIFIER || "off", VERIFIER_ENGINES, "PALANTIR_VERIFIER", problems);
+  const allowRemote = env.PALANTIR_VERIFIER_ALLOW_REMOTE === "true";
+  const apiKey = present(env, "TYPESAFE_API_KEY");
+  if (engine === "typesafe" && !allowRemote) {
+    problems.push("PALANTIR_VERIFIER=typesafe exige PALANTIR_VERIFIER_ALLOW_REMOTE=true (perguntas e trechos saem desta máquina)");
+  }
+  if (engine === "typesafe" && !apiKey) problems.push("PALANTIR_VERIFIER=typesafe exige TYPESAFE_API_KEY");
+  return {
+    engine,
+    allowRemote,
+    apiKey,
+    model: env.PALANTIR_VERIFIER_MODEL || "jev-1.14.0",
+    minProbability: decimal(env.PALANTIR_VERIFIER_MIN_PROBABILITY ?? "0.7", "PALANTIR_VERIFIER_MIN_PROBABILITY", problems),
+  };
+}
+
 function storeKinds(value: string, problems: string[]): StoredMediaKind[] {
   const kinds = value.split(",").map((k) => k.trim()).filter((k) => k !== "");
   const known = (k: string): k is StoredMediaKind => (MEDIA_STORE_KINDS as readonly string[]).includes(k);
@@ -139,13 +237,18 @@ function storeKinds(value: string, problems: string[]): StoredMediaKind[] {
 
 /** RN-03: nunca repete a URL na mensagem (pode conter credencial ou revelar o provedor). */
 function transcriberUrl(value: string, allowRemote: boolean, problems: string[]): string {
+  remoteUrl(value, allowRemote, "PALANTIR_TRANSCRIBER", "o áudio sairia dela", problems);
+  return value;
+}
+
+/** URL http(s), e fora desta máquina só com `<prefixo>_ALLOW_REMOTE=true` (S4 RN-03, S6 RN-05). */
+function remoteUrl(value: string, allowRemote: boolean, prefix: string, leaves: string, problems: string[]): void {
   const url = URL.canParse(value) ? new URL(value) : undefined;
   if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
-    problems.push("PALANTIR_TRANSCRIBER_URL deve ser uma URL http(s)");
+    problems.push(`${prefix}_URL deve ser uma URL http(s)`);
   } else if (!allowRemote && !LOOPBACK_HOSTS.has(url.hostname)) {
-    problems.push("PALANTIR_TRANSCRIBER_URL fora desta máquina exige PALANTIR_TRANSCRIBER_ALLOW_REMOTE=true (o áudio sairia dela)");
+    problems.push(`${prefix}_URL fora desta máquina exige ${prefix}_ALLOW_REMOTE=true (${leaves})`);
   }
-  return value;
 }
 
 function whatsappConfig(env: Env, problems: string[]): WhatsAppConfig {

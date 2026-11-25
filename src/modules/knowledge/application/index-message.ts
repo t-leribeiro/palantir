@@ -38,7 +38,8 @@ export type IndexMessage = (request: IndexRequest) => Promise<IndexOutcome>;
 
 /**
  * Um trecho com o texto (ou a legenda) e, para áudio transcrito, blocos da transcrição com a faixa de tempo
- * (feature 005). Embeddings chegam numa feature seguinte. Reindexar substitui os trechos da mensagem.
+ * (feature 005). O sentido de cada trecho é calculado depois, fora desta transação (feature 007, embed-chunks.ts).
+ * Reindexar substitui os trechos da mensagem, e a cascata leva os vetores antigos.
  */
 export function createIndexMessage(repo: ChunkRepository): IndexMessage {
   return async ({ messageId, spaceId }) => {

@@ -3,6 +3,7 @@ import { MAX_INDEXED_CHARS, createIndexMessage, type Chunk, type IndexableMessag
 import {
   MAX_LIMIT,
   bestPerMessage,
+  CANDIDATES_PER_STRATEGY,
   createSearchEvidence,
   isLowConfidence,
   type Evidence,
@@ -71,24 +72,25 @@ describe("retrieval: buscar evidências", () => {
 
   it("não consulta o índice com pergunta vazia", async () => {
     const { run, calls } = search([ev("m1", 1)]);
-    expect(await run({ spaceId: "s1", query: "   " })).toEqual({ results: [], lowConfidence: true });
+    expect(await run({ spaceId: "s1", query: "   " })).toEqual({ results: [], lowConfidence: true, degraded: false });
     expect(calls).toEqual([]);
   });
 
-  it("passa espaço, consulta e limite ao índice, limitando o máximo", async () => {
-    const { run, calls } = search([ev("m1", 1)]);
-    await run({ spaceId: "s1", query: " alloy ", limit: 500 });
-    await run({ spaceId: "s1", query: "alloy" });
+  it("feature 007: pede ao índice as candidatas da forma de busca e limita a resposta", async () => {
+    const many = Array.from({ length: 60 }, (_, i) => ev(`m${String(i).padStart(2, "0")}`, 1));
+    const { run, calls } = search(many);
+    expect((await run({ spaceId: "s1", query: " alloy ", limit: 500 })).results).toHaveLength(MAX_LIMIT);
+    expect((await run({ spaceId: "s1", query: "alloy" })).results).toHaveLength(10);
     expect(calls).toEqual([
-      ["s1", "alloy", MAX_LIMIT],
-      ["s1", "alloy", 10],
+      ["s1", "alloy", CANDIDATES_PER_STRATEGY],
+      ["s1", "alloy", CANDIDATES_PER_STRATEGY],
     ]);
   });
 
   it("E001: repassa o tipo pedido ao índice", async () => {
     const { run, calls } = search([ev("m1", 1)]);
     await run({ spaceId: "s1", query: "temporal", kind: "audio" });
-    expect(calls).toEqual([["s1", "temporal", 10, "audio"]]);
+    expect(calls).toEqual([["s1", "temporal", CANDIDATES_PER_STRATEGY, "audio"]]);
   });
 
   it("sinaliza baixa confiança abaixo do limiar e confiança no limiar", async () => {

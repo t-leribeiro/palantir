@@ -1,5 +1,5 @@
 {
-  "$comment": "Corpus e perguntas sintéticos (sem dados reais de terceiros). Usado por `npm run eval` (T054, RF-18).",
+  "$comment": "Corpus e perguntas sintéticos (sem dados reais de terceiros). Usado por `npm run eval` (T054, RF-18; feature 007, D-12: `type` separa exata, parafrase, digitacao e sem_evidencia).",
   "corpus": [
     {
       "id": "m01",
@@ -129,7 +129,8 @@
       "expectedMessageIds": [
         "m01"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p02",
@@ -137,7 +138,8 @@
       "expectedMessageIds": [
         "m02"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p03",
@@ -145,7 +147,8 @@
       "expectedMessageIds": [
         "m03"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p04",
@@ -153,7 +156,8 @@
       "expectedMessageIds": [
         "m04"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p05",
@@ -161,7 +165,8 @@
       "expectedMessageIds": [
         "m05"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p06",
@@ -169,7 +174,8 @@
       "expectedMessageIds": [
         "m06"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p07",
@@ -177,7 +183,8 @@
       "expectedMessageIds": [
         "m07"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p08",
@@ -185,7 +192,8 @@
       "expectedMessageIds": [
         "m08"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p09",
@@ -193,7 +201,8 @@
       "expectedMessageIds": [
         "m09"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p10",
@@ -201,7 +210,8 @@
       "expectedMessageIds": [
         "m10"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p11",
@@ -209,7 +219,8 @@
       "expectedMessageIds": [
         "m11"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p12",
@@ -217,7 +228,8 @@
       "expectedMessageIds": [
         "m12"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p13",
@@ -225,7 +237,8 @@
       "expectedMessageIds": [
         "m13"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p14",
@@ -233,7 +246,8 @@
       "expectedMessageIds": [
         "m14"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p15",
@@ -241,7 +255,8 @@
       "expectedMessageIds": [
         "m15"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p16",
@@ -249,7 +264,8 @@
       "expectedMessageIds": [
         "m16"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p17",
@@ -257,7 +273,8 @@
       "expectedMessageIds": [
         "m17"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p18",
@@ -265,7 +282,8 @@
       "expectedMessageIds": [
         "m18"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p19",
@@ -273,7 +291,8 @@
       "expectedMessageIds": [
         "m19"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p20",
@@ -281,7 +300,8 @@
       "expectedMessageIds": [
         "m20"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p21",
@@ -289,7 +309,8 @@
       "expectedMessageIds": [
         "m02"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p22",
@@ -297,7 +318,8 @@
       "expectedMessageIds": [
         "m03"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p23",
@@ -305,7 +327,8 @@
       "expectedMessageIds": [
         "m04"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "p24",
@@ -313,53 +336,352 @@
       "expectedMessageIds": [
         "m11"
       ],
-      "expectsNoEvidence": false
+      "expectsNoEvidence": false,
+      "type": "exata"
     },
     {
       "id": "n01",
       "question": "Quem falou de Kafka?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n02",
       "question": "Alguém recomendou o Jenkins?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n03",
       "question": "O que disseram sobre Rust?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n04",
       "question": "Comentaram sobre Snowflake?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n05",
       "question": "Quem usa Svelte no front?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n06",
       "question": "Falaram de blockchain?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n07",
       "question": "Alguém testou o Cassandra?",
       "expectedMessageIds": [],
-      "expectsNoEvidence": true
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
     },
     {
       "id": "n08",
       "question": "O que acharam do Heroku?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true,
+      "type": "sem_evidencia"
+    },
+    {
+      "id": "q01",
+      "type": "parafrase",
+      "question": "Qual ferramenta junta num só lugar os dados de monitoramento?",
+      "expectedMessageIds": [
+        "m01"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q02",
+      "type": "parafrase",
+      "question": "Alguém está trocando de fornecedor de observabilidade para não ficar preso a ele?",
+      "expectedMessageIds": [
+        "m02"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q03",
+      "type": "parafrase",
+      "question": "Quem conseguiu baratear a infraestrutura de contêineres?",
+      "expectedMessageIds": [
+        "m03"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q04",
+      "type": "parafrase",
+      "question": "Quem sugeriu algo para coordenar processos demorados?",
+      "expectedMessageIds": [
+        "m04"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q05",
+      "type": "parafrase",
+      "question": "Como foi a experiência com pesquisa por significado em grande volume?",
+      "expectedMessageIds": [
+        "m05"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q06",
+      "type": "parafrase",
+      "question": "Qual modelo converte fala em texto com boa precisão no nosso idioma?",
+      "expectedMessageIds": [
+        "m06"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q07",
+      "type": "parafrase",
+      "question": "Alguém defendeu começar sem microsserviços?",
+      "expectedMessageIds": [
+        "m07"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q08",
+      "type": "parafrase",
+      "question": "Como evitar que os ambientes fiquem diferentes uns dos outros?",
+      "expectedMessageIds": [
+        "m08"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q09",
+      "type": "parafrase",
+      "question": "Como evitar que a IA invente coisas nas respostas?",
+      "expectedMessageIds": [
+        "m09"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q10",
+      "type": "parafrase",
+      "question": "Qual solução de registros saiu mais em conta?",
+      "expectedMessageIds": [
+        "m10"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q11",
+      "type": "parafrase",
+      "question": "Alguém usa um assistente de IA para conferir as mudanças antes de integrar?",
+      "expectedMessageIds": [
+        "m11"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q12",
+      "type": "parafrase",
+      "question": "Qual ferramenta ajudou a publicar versões em vários ambientes Kubernetes?",
+      "expectedMessageIds": [
+        "m12"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q13",
+      "type": "parafrase",
+      "question": "Teve alguém arrependido de guardar o histórico de eventos como fonte da verdade?",
+      "expectedMessageIds": [
+        "m13"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q14",
+      "type": "parafrase",
+      "question": "Que framework ajudou a criar assistentes autônomos com memória?",
+      "expectedMessageIds": [
+        "m14"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q15",
+      "type": "parafrase",
+      "question": "Guardar métricas por muito tempo encheu o armazenamento?",
+      "expectedMessageIds": [
+        "m15"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q16",
+      "type": "parafrase",
+      "question": "Por que escolheram um banco relacional em vez de um de documentos?",
+      "expectedMessageIds": [
+        "m16"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q17",
+      "type": "parafrase",
+      "question": "Modelos que entendem vários idiomas são melhores do que converter tudo para inglês?",
+      "expectedMessageIds": [
+        "m17"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q18",
+      "type": "parafrase",
+      "question": "A análise estática de segurança achou alguma vulnerabilidade?",
+      "expectedMessageIds": [
+        "m18"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q19",
+      "type": "parafrase",
+      "question": "Liberar funcionalidades aos poucos ajudou a evitar problemas na promoção?",
+      "expectedMessageIds": [
+        "m19"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "q20",
+      "type": "parafrase",
+      "question": "Como baratear as chamadas ao modelo de linguagem?",
+      "expectedMessageIds": [
+        "m20"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "t01",
+      "type": "digitacao",
+      "question": "O que disseram do Karpentr?",
+      "expectedMessageIds": [
+        "m03"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "t02",
+      "type": "digitacao",
+      "question": "Quem comentou sobre o Grafna Alloy?",
+      "expectedMessageIds": [
+        "m01"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "t03",
+      "type": "digitacao",
+      "question": "Quem recomendou o Tempral?",
+      "expectedMessageIds": [
+        "m04"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "t04",
+      "type": "digitacao",
+      "question": "Quem falou de LangGrah?",
+      "expectedMessageIds": [
+        "m14"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "t05",
+      "type": "digitacao",
+      "question": "O Semgrp pegou alguma coisa?",
+      "expectedMessageIds": [
+        "m18"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "t06",
+      "type": "digitacao",
+      "question": "O que acharam do Elastisearch?",
+      "expectedMessageIds": [
+        "m10"
+      ],
+      "expectsNoEvidence": false
+    },
+    {
+      "id": "n09",
+      "type": "sem_evidencia",
+      "question": "Alguém usa um sistema de mensageria distribuída?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n10",
+      "type": "sem_evidencia",
+      "question": "Quem recomendou um banco de grafos?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n11",
+      "type": "sem_evidencia",
+      "question": "Alguém migrou para serverless e reduziu a conta?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n12",
+      "type": "sem_evidencia",
+      "question": "Quem falou de computação quântica?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n13",
+      "type": "sem_evidencia",
+      "question": "Alguém configurou alertas de SLO no Datadog?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n14",
+      "type": "sem_evidencia",
+      "question": "Alguém treinou um modelo próprio do zero?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n15",
+      "type": "sem_evidencia",
+      "question": "Qual a opinião sobre Kubernetes na borda com K3s?",
+      "expectedMessageIds": [],
+      "expectsNoEvidence": true
+    },
+    {
+      "id": "n16",
+      "type": "sem_evidencia",
+      "question": "Quem usa Redis como cache de sessão?",
       "expectedMessageIds": [],
       "expectsNoEvidence": true
     }
