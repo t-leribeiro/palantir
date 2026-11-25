@@ -25,7 +25,8 @@ export async function startModel(model: string, timeoutMs = 20 * 60_000): Promis
   const run = docker([
     "run", "-d", "--name", MEASURE_CONTAINER, "--memory", "6g",
     "-p", `127.0.0.1:${MEASURE_PORT}:80`, "-v", `${MODELS_VOLUME}:/data`,
-    "-e", `MODEL_ID=${model}`, "-e", "MAX_CLIENT_BATCH_SIZE=32", TEI_IMAGE,
+    // Mesmos limites do motor local (infra/modules/embedder): o padrão de 16384 tokens mata o aquecimento por memória.
+    "-e", `MODEL_ID=${model}`, "-e", "MAX_CLIENT_BATCH_SIZE=32", "-e", "MAX_BATCH_TOKENS=2048", "-e", "AUTO_TRUNCATE=true", TEI_IMAGE,
   ]);
   if (!run.ok) throw new Error(`não consegui subir o motor de medição (docker run): ${run.out.split("\n").at(-1) ?? ""}`);
   const deadline = Date.now() + timeoutMs;

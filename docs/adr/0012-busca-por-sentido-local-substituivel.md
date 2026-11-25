@@ -49,7 +49,20 @@ A Anthropic não oferece modelo de embeddings; a documentação dela indica a Vo
    - o `npm run eval` compara a busca só por palavra (a linha de base da S5) com a combinada, por tipo de pergunta;
    - o `npm run eval:busca` mede cada modelo candidato num container temporário, com o conjunto sintético e com as perguntas reais em `exports/`, e mostra só números.
 
-**Modelo escolhido:** registrado aqui depois da medição com as perguntas reais do T3.
+**Modelo escolhido (2026-11-25):** `intfloat/multilingual-e5-base` (768 dimensões, prefixos `query: ` e `passage: `), com limiar de sentido τ = 0,86. Medição só pelo sentido, com 27 perguntas reais do T3 (22 com resposta, 5 sem) e o conjunto sintético:
+
+| Modelo | R@1 real | R@10 real | MRR real | Com resposta acima de τ (real) | τ | msg/s | Memória |
+|---|---|---|---|---|---|---|---|
+| **multilingual-e5-base** | **0,41** | **0,68** | **0,47** | **45%** | 0,86 | 3 | 4,7 GB |
+| bge-m3 | 0,27 | 0,64 | 0,36 | 41% | 0,60 | 1 | 5,0 GB |
+| multilingual-e5-small | 0,36 | 0,55 | 0,44 | 18% | 0,89 | 9 | 4,2 GB |
+| paraphrase-multilingual-MiniLM-L12-v2 | 0,09 | 0,36 | 0,17 | 14% | 0,62 | 8 | 3,8 GB |
+| Qwen3-Embedding-0.6B | 0,05 | 0,23 | 0,12 | 9% | 0,70 | < 1 | 2,7 GB |
+
+- O e5-base foi o melhor nas conversas reais.
+- O bge-m3 ganhou no conjunto sintético, mas perdeu nas mensagens reais e é 3 vezes mais lento.
+- O τ saiu de só 5 perguntas sem resposta: é uma primeira aproximação, ajustável no `.env` sem recalcular os vetores.
+- O motor sobe com lotes de até 2.048 tokens (`MAX_BATCH_TOKENS`) e corta texto mais longo (`AUTO_TRUNCATE`): com o padrão de 16.384, o aquecimento do bge-m3 e do Qwen3 estourou a memória.
 
 ## Consequências
 
@@ -59,7 +72,7 @@ A Anthropic não oferece modelo de embeddings; a documentação dela indica a Vo
   - o motor fora do ar só degrada a busca para "por palavra".
 - **Negativas e riscos:**
   - o cálculo do histórico disputa a CPU com a transcrição;
-  - o motor local usa mais memória do que o previsto: o `multilingual-e5-small` mediu 3,6 GB no container de medição, e o limite do container é de 3 GB, ajustável;
+  - o motor local usa mais memória do que o previsto: o `multilingual-e5-base` mediu 4,7 GB, e o limite do container subiu de 3 GB para 6 GB;
   - a busca por palavra parecida também aproxima palavras comuns. Por exemplo, "recomendou" acha "recomendo", e uma pergunta sem resposta pode passar. Ela pode ser desligada com `PALANTIR_TYPO_SEARCH=off`;
   - numa troca entre dois modelos locais, o motor só serve o novo, então a busca por sentido fica degradada até o novo ficar completo.
 
