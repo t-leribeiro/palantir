@@ -99,6 +99,7 @@ Se ainda faltar folga, a busca por erro de digitação sai da S6a (a parte de tr
   - A medição de serviços online ficou de fora até o ADR de dados de terceiros.
   - O sintético com o `multilingual-e5-small` deu R@5 de 0,94, τ de 0,87 e 36% dos positivos acima do τ.
 - **D-14 (métricas):** `verifier_calls_total` virou `search_strategy_seconds{strategy="verifier"}` mais `search_degraded_total{reason="verifier"}`. Entraram `embedder_up` e `embedding_model_activations_total`.
+- **T008, correção depois da esteira:** o Text Embeddings Inference não tem `/v1/models`. Isso foi conferido num container real. A saúde do adaptador passou a tentar `/health` e depois `/v1/models`; sem isso, o alerta `EmbedderDown` dispararia sempre. A medição usa o adaptador para a saúde, o que também tirou o achado do Semgrep (requisição HTTP literal em `scripts/busca/tei.ts`). O teste no container também confirmou que o TEI devolve o id do modelo no campo `model`.
 - **T007 (E2E):** o cenário pelo WhatsApp simulado não foi duplicado. A busca é a mesma nos dois canais, e o contrato não mudou.
 
 ## Histórico de alterações

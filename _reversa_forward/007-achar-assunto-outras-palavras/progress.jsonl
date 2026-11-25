@@ -21,3 +21,4 @@
 {"ts": "2026-11-25T03:10:02Z", "action": "T022", "status": "done", "files": ["scripts/doctor.mjs", "test/e2e/semantic-search.test.ts"]}
 {"ts": "2026-11-25T03:21:18Z", "action": "T023", "status": "done", "files": ["docs/adr/0012-busca-por-sentido-local-substituivel.md", "docs/adr/README.md", "README.md", "CLAUDE.md", "AGENTS.md", "docs/plano-de-fatias.md", "src/modules/knowledge/application/index-message.ts"]}
 {"ts": "2026-11-25T03:21:44Z", "action": "T005", "status": "done", "files": ["eval/cases.json"]}
+{"ts": "2026-11-25T04:05:57Z", "action": "T008", "status": "corrected", "files": ["src/modules/knowledge/infrastructure/embedders/openai-compatible.ts", "scripts/busca/tei.ts", "scripts/eval-busca.ts", "test/unit/knowledge-retrieval/embedders.test.ts"]}
