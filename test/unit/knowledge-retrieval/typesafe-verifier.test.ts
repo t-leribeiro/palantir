@@ -42,10 +42,43 @@ describe("verificador TypeSafe", () => {
     await expect(refused.verify("segredo da pergunta", candidates, AbortSignal.timeout(1000))).rejects.not.toThrow(/segredo/);
   });
 
-  it("o corpo leva pergunta, autor, conversa, data e texto de cada candidata", () => {
-    const body = systemOneBody("m", "q", candidates) as { state: { pergunta: string; mensagens: unknown[] } };
+  const [c0, c1] = candidates as [(typeof candidates)[number], (typeof candidates)[number]];
+  type Body = { state: { pergunta: string; mensagens: { autor: string; texto: string }[] } };
+  const bodyOf = (question: string, list = candidates) => systemOneBody("m", question, list) as Body;
+
+  it("ADR-0013: o corpo leva a pergunta e, por candidata, só o texto e o apelido do autor", () => {
+    const body = bodyOf("q");
     expect(body.state.pergunta).toBe("q");
-    expect(body.state.mensagens[0]).toEqual({ autor: "Carla", conversa: "DevOps", data: "2026-11-20T10:00:00.000Z", texto: "o Karpenter reduziu o custo" });
+    expect(body.state.mensagens).toEqual([
+      { autor: "pessoa 1", texto: "o Karpenter reduziu o custo" },
+      { autor: "pessoa 2", texto: "o Alloy coleta telemetria" },
+    ]);
+    const json = JSON.stringify(body);
+    for (const leaked of ["Carla", "Ana", "DevOps", "Arquitetura", "2026-11-20", "2026-11-21"]) expect(json).not.toContain(leaked);
+  });
+
+  it("ADR-0013: o mesmo autor tem o mesmo apelido, e o nome na pergunta vira o apelido dele", () => {
+    const list = [
+      { ...c0, author: "Ana Paula Souza" },
+      { ...c1, author: "João" },
+      { ...c0, id: "3", author: "Ana Paula Souza" },
+    ];
+    expect(bodyOf("o que a ana paula souza disse sobre o SLA?", list).state.pergunta).toBe("o que a pessoa 1 disse sobre o SLA?");
+    expect(bodyOf("O que o JOAO falou do custo?", list).state.pergunta).toBe("O que o pessoa 2 falou do custo?");
+    expect(bodyOf("e a Ana, o que achou?", list).state.pergunta).toBe("e a pessoa 1, o que achou?");
+    expect(bodyOf("quem disse que o Joãozinho saiu?", list).state.pergunta).toBe("quem disse que o Joãozinho saiu?");
+    expect(bodyOf("q", list).state.mensagens.map((m) => m.autor)).toEqual(["pessoa 1", "pessoa 2", "pessoa 1"]);
+  });
+
+  it("ADR-0013: primeiro nome repetido entre autores não é trocado; número como autor só pelo número inteiro", () => {
+    const list = [
+      { ...c0, author: "Ana Paula" },
+      { ...c1, author: "Ana Souza" },
+      { ...c0, id: "3", author: "+55 11 98888-7777" },
+    ];
+    expect(bodyOf("o que a Ana disse?", list).state.pergunta).toBe("o que a Ana disse?");
+    expect(bodyOf("o que a Ana Souza disse?", list).state.pergunta).toBe("o que a pessoa 2 disse?");
+    expect(bodyOf("o que o +55 11 98888-7777 mandou? e o 55?", list).state.pergunta).toBe("o que o pessoa 3 mandou? e o 55?");
   });
 
   it("verificador falso: marcador dá 0,9, o resto 0,1; fora do ar lança", async () => {

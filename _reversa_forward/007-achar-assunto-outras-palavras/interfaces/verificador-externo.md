@@ -77,10 +77,10 @@ Na subida, com o verificador ligado, o log avisa (sem conteúdo): "verificador e
 
 ## 4. Privacidade
 
-- O que sai da máquina, por pergunta: o texto da pergunta e, de cada candidata, o trecho, o autor (nome de perfil), o título da conversa e a data.
-- O que nunca sai: telefones, ids internos (o `id` da candidata fica do nosso lado e não vai no `state`) e outras mensagens.
+- O que sai da máquina, por pergunta (ADR-0013): o texto da pergunta e, de cada candidata, o trecho e o apelido do autor ("pessoa 1", "pessoa 2", refeito a cada pergunta). Um nome na pergunta que coincida com o de um autor das candidatas vai trocado pelo mesmo apelido.
+- O que nunca sai: o nome do autor, o título da conversa, a data, os ids internos (o `id` da candidata fica do nosso lado e não vai no `state`) e outras mensagens. Nomes e números escritos dentro do próprio trecho vão com ele.
 - Nada disso vai para log ou métrica. A métrica `verifier_calls_total{outcome}` só conta.
-- Segundo a documentação da TypeSafe, eles não treinam modelos com os dados dos clientes, e a retenção zero existe para clientes enterprise sob pedido. A documentação não fala de LGPD nem de região. O ADR de envio de dados de terceiros precisa ler o DPA e a política de privacidade antes de ligar o verificador com dados reais.
+- Segundo a documentação da TypeSafe, eles não treinam modelos com os dados dos clientes, e a retenção zero existe para clientes enterprise sob pedido. A documentação não fala de LGPD nem de região. O ADR-0013 leu o DPA e a política de privacidade (EUA, retenção sem prazo, SOC 2 Type II) e libera o uso só para testes do dono.
 
 ## 5. Adaptador `fake` (testes)
 
@@ -90,3 +90,4 @@ Devolve p = 0,9 para as candidatas cujo trecho contém um marcador de fixture e 
 > - Uma requisição por pergunta, com as candidatas em `state.mensagens` e uma pergunta "noul" `c0..cN` para cada uma, conforme a recomendação da TypeSafe de juntar perguntas independentes sobre o mesmo estado.
 > - A chamada é com `fetch`, sem SDK.
 > - A resposta é lida em `answers.cN.noul`.
+> - ADR-0013 (2026-11-25): `state.mensagens[i]` leva só `autor` (apelido) e `texto`; a instrução da noul pede que, em pergunta sobre o que uma pessoa disse, a mensagem seja dessa pessoa.
