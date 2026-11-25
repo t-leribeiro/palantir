@@ -47,10 +47,19 @@ export interface EvidenceVerifier {
 
 export type DegradedReason = "embedder" | "verifier";
 
-/** Métricas da busca (D-14), sem texto: só a forma de busca, a duração e o motivo da degradação. */
+/**
+ * O que o verificador decidiu numa pergunta, só em números: `cited` quando aprovou alguma candidata, `nothing_found`
+ * quando recusou todas (a resposta vira "não encontrei") e `failed` quando não respondeu (a busca volta aos sinais).
+ */
+export type VerifierResult =
+  | { readonly outcome: "cited" | "nothing_found"; readonly approved: number; readonly rejected: number; readonly unanswered: number }
+  | { readonly outcome: "failed" };
+
+/** Métricas da busca (D-14), sem texto: só a forma de busca, a duração, o motivo da degradação e as contagens do verificador. */
 export interface SearchObserver {
   strategy(name: "lexical" | "typo" | "semantic" | "verifier", seconds: number): void;
   degraded(reason: DegradedReason): void;
+  verifier(result: VerifierResult): void;
 }
 
 export interface SearchRequest {
@@ -87,7 +96,20 @@ export interface SearchDeps {
 
 export type SearchEvidence = (request: SearchRequest) => Promise<SearchResponse>;
 
-const NOOP_OBSERVER: SearchObserver = { strategy: () => undefined, degraded: () => undefined };
+const NOOP_OBSERVER: SearchObserver = { strategy: () => undefined, degraded: () => undefined, verifier: () => undefined };
+
+/** Aprovadas (p ≥ mínimo), recusadas e sem resposta (429/529 ou fora do mapa) entre as candidatas enviadas. */
+function tally(ids: readonly string[], probabilities: ReadonlyMap<string, number>, min: number): VerifierResult {
+  let approved = 0;
+  let rejected = 0;
+  for (const id of ids) {
+    const p = probabilities.get(id);
+    if (p === undefined) continue;
+    if (p >= min) approved += 1;
+    else rejected += 1;
+  }
+  return { outcome: approved > 0 ? "cited" : "nothing_found", approved, rejected, unanswered: ids.length - approved - rejected };
+}
 
 async function timed<T>(observer: SearchObserver, name: Parameters<SearchObserver["strategy"]>[0], work: () => Promise<T>): Promise<T> {
   const started = performance.now();
@@ -140,6 +162,7 @@ export function createSearchEvidence(deps: SearchDeps): SearchEvidence {
     const candidates = top.map((e) => ({ id: e.messageId, text: e.chunkText, author: e.author, sourceTitle: e.sourceTitle, sentAt: e.sentAt.toISOString() }));
     const { verifier, minProbability } = deps.verifier;
     const probabilities = await timed(observer, "verifier", () => verifier.verify(query, candidates, AbortSignal.timeout(VERIFIER_TIMEOUT_MS)));
+    observer.verifier(tally(candidates.map((c) => c.id), probabilities, minProbability));
     return top
       .map((e, position) => ({ e, position, p: probabilities.get(e.messageId) }))
       .filter((x): x is { e: Evidence; position: number; p: number } => x.p !== undefined && x.p >= minProbability)
@@ -159,6 +182,7 @@ export function createSearchEvidence(deps: SearchDeps): SearchEvidence {
       if (byVerifier) return { results: byVerifier.slice(0, limit), lowConfidence: byVerifier.length === 0, degraded: ranked.degraded };
     } catch {
       observer.degraded("verifier");
+      observer.verifier({ outcome: "failed" });
       return decided(fused, ranked, deps.lowConfidenceThreshold, limit, true);
     }
     return decided(fused, ranked, deps.lowConfidenceThreshold, limit, ranked.degraded);

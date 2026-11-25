@@ -53,4 +53,20 @@ describe("observadores da busca pelo sentido", () => {
       { name: "search_degraded_total", value: 1, attrs: { reason: "embedder" } },
     ]);
   });
+
+  it("chamadas ao verificador pelo efeito na resposta e candidatas pelo julgamento, sem conteúdo", () => {
+    const { meter, recorded } = fakeMeter();
+    const o = createOtelSearchObserver(meter);
+    o.verifier({ outcome: "cited", approved: 2, rejected: 27, unanswered: 1 });
+    o.verifier({ outcome: "nothing_found", approved: 0, rejected: 0, unanswered: 0 });
+    o.verifier({ outcome: "failed" });
+    expect(recorded).toEqual([
+      { name: "verifier_calls_total", value: 1, attrs: { outcome: "cited" } },
+      { name: "verifier_candidates_total", value: 2, attrs: { outcome: "approved" } },
+      { name: "verifier_candidates_total", value: 27, attrs: { outcome: "rejected" } },
+      { name: "verifier_candidates_total", value: 1, attrs: { outcome: "unanswered" } },
+      { name: "verifier_calls_total", value: 1, attrs: { outcome: "nothing_found" } },
+      { name: "verifier_calls_total", value: 1, attrs: { outcome: "failed" } },
+    ]);
+  });
 });

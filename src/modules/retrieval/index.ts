@@ -17,6 +17,7 @@ export {
   type SearchIndex,
   type SearchKind,
   type SearchObserver,
+  type VerifierResult,
   type SearchRequest,
   type SearchResponse,
   type VerifierCandidate,

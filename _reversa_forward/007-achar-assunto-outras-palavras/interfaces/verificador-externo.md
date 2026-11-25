@@ -79,7 +79,9 @@ Na subida, com o verificador ligado, o log avisa (sem conteúdo): "verificador e
 
 - O que sai da máquina, por pergunta (ADR-0013): o texto da pergunta e, de cada candidata, o trecho e o apelido do autor ("pessoa 1", "pessoa 2", refeito a cada pergunta). Um nome na pergunta que coincida com o de um autor das candidatas vai trocado pelo mesmo apelido.
 - O que nunca sai: o nome do autor, o título da conversa, a data, os ids internos (o `id` da candidata fica do nosso lado e não vai no `state`) e outras mensagens. Nomes e números escritos dentro do próprio trecho vão com ele.
-- Nada disso vai para log ou métrica. A métrica `verifier_calls_total{outcome}` só conta.
+- Nada disso vai para log ou métrica. As métricas só contam:
+  - `verifier_calls_total{outcome}`, uma por pergunta: `cited` (aprovou alguma candidata), `nothing_found` (recusou todas, e a resposta vira "não encontrei") ou `failed` (não respondeu, e a busca volta aos sinais);
+  - `verifier_candidates_total{outcome}`, por candidata enviada: `approved` (p ≥ mínimo), `rejected` ou `unanswered` (sem resposta, como em 429 e 529).
 - Segundo a documentação da TypeSafe, eles não treinam modelos com os dados dos clientes, e a retenção zero existe para clientes enterprise sob pedido. A documentação não fala de LGPD nem de região. O ADR-0013 leu o DPA e a política de privacidade (EUA, retenção sem prazo, SOC 2 Type II) e libera o uso só para testes do dono.
 
 ## 5. Adaptador `fake` (testes)

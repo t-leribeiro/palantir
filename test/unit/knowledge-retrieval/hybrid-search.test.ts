@@ -49,7 +49,7 @@ describe("busca combinada", () => {
       index: index({ lexical: [ev("exata", 1)], semantic: [ev("parafrase", 0.9)] }),
       lowConfidenceThreshold: 0.5,
       queryEmbedding: { embedQuery: async () => Promise.reject(new Error("fora do ar")) },
-      observer: { strategy: () => undefined, degraded: (r) => void degraded.push(r) },
+      observer: { strategy: () => undefined, degraded: (r) => void degraded.push(r), verifier: () => undefined },
     });
     const response = await search({ spaceId: "s", query: "x" });
     expect(response.results.map((e) => e.messageId)).toEqual(["exata"]);
@@ -93,5 +93,22 @@ describe("verificador externo", () => {
     const response = await search({ spaceId: "s", query: "x" });
     expect(response.results.map((e) => e.messageId)).toEqual(["exata"]);
     expect(response.degraded).toBe(true);
+  });
+
+  it("conta o que o verificador decidiu, só números: aprovadas, recusadas, sem resposta e o efeito na resposta", async () => {
+    const seen: unknown[] = [];
+    const observer = { strategy: () => undefined, degraded: () => undefined, verifier: (r: unknown) => void seen.push(r) };
+    const lists = { lexical: [ev("a", 1), ev("b", 0.5)], semantic: [ev("c", 0.4)] };
+    const run = (p: Record<string, number>) =>
+      createSearchEvidence({ index: index(lists), lowConfidenceThreshold: 0.5, queryEmbedding: embedding(), observer, verifier: { verifier: verifier(p), minProbability: 0.7 } })({ spaceId: "s", query: "x" });
+    await run({ a: 0.75, b: 0.2, c: 0.95 });
+    await run({ a: 0.1 });
+    const broken: EvidenceVerifier = { provider: "fake", verify: async () => Promise.reject(new Error("429")) };
+    await createSearchEvidence({ index: index(lists), lowConfidenceThreshold: 0.5, observer, verifier: { verifier: broken, minProbability: 0.7 } })({ spaceId: "s", query: "x" });
+    expect(seen).toEqual([
+      { outcome: "cited", approved: 2, rejected: 1, unanswered: 0 },
+      { outcome: "nothing_found", approved: 0, rejected: 1, unanswered: 2 },
+      { outcome: "failed" },
+    ]);
   });
 });
