@@ -65,3 +65,7 @@ W001 a W010, em `_reversa_forward/008-mostrar-original-com-contexto/regression-w
 - `_reversa_forward/008-mostrar-original-com-contexto/progress.jsonl`
 - `_reversa_forward/008-mostrar-original-com-contexto/actions.md` (Notas de execução)
 - `_reversa_forward/008-mostrar-original-com-contexto/interfaces/`
+
+## Atualização 2026-11-25
+
+A demonstração com o chip foi feita pelo roteiro do `onboarding.md` da 008 e funcionou. O áudio chegou como mensagem de voz, o que confirma a premissa do `ptt` na versão rc do Baileys. Com isso, o critério P1 do `prd.md` ("acesso à mensagem original") fica atendido por "mostra a N". A S7 foi entregue no PR #19.
