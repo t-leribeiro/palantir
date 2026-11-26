@@ -1,0 +1,10 @@
+--- a/test/unit/media/transcribers.test.ts
++++ b/test/unit/media/transcribers.test.ts
+@@ adaptador openai-compatible @@
++  it.each([236.06, 361.1, 40.05])("BUG-20261125-JOMJ: duração decimal (%s s) não quebra o prazo; a chamada chega ao motor", async (durationHint) => {
++    reply = { status: 200, body: SPEACHES_OK };
++    const result = await transcriber().transcribe({ audio, mimeType: "audio/ogg", durationHint });
++    expect(result.segments).toHaveLength(2);
++    expect(one(captured).url).toBe("/v1/audio/transcriptions");
++  });
++

@@ -1,0 +1,47 @@
+diff --git a/test/unit/media/transcribers.test.ts b/test/unit/media/transcribers.test.ts
+index 239ea13..a59e944 100644
+--- a/test/unit/media/transcribers.test.ts
++++ b/test/unit/media/transcribers.test.ts
+@@ -60,6 +60,18 @@ const SPEACHES_OK = {
+ };
+ 
+ const audio = new Uint8Array([1, 2, 3, 4]);
++
++/** Troca o fetch global por um que sempre falha: prova que o adaptador fala com o motor pelo próprio transporte. */
++async function withoutGlobalFetch<T>(work: () => Promise<T>): Promise<T> {
++  const original = globalThis.fetch;
++  globalThis.fetch = (async () => Promise.reject(new TypeError("fetch global usado"))) as typeof fetch;
++  try {
++    return await work();
++  } finally {
++    globalThis.fetch = original;
++  }
++}
++
+ const transcriber = (extra: Partial<Parameters<typeof createOpenAiCompatibleTranscriber>[0]> = {}) =>
+   createOpenAiCompatibleTranscriber({ url: `${base}/`, model: "Systran/faster-whisper-small", ...extra });
+ 
+@@ -129,6 +141,23 @@ describe("adaptador openai-compatible", () => {
+     await expect(down.transcribe({ audio, mimeType: "audio/ogg" })).rejects.toMatchObject({ kind: "unavailable" });
+   });
+ 
++  it("BUG-20261125-B4B3: não depende do fetch global do Node, que corta a resposta do motor aos 300 s", async () => {
++    reply = { status: 200, body: SPEACHES_OK };
++    const result = await withoutGlobalFetch(() => transcriber({ apiKey: "sk-teste" }).transcribe({ audio, mimeType: "audio/ogg", durationHint: 16 }));
++    expect(result.segments).toHaveLength(2);
++    expect(one(captured)).toMatchObject({ url: "/v1/audio/transcriptions", method: "POST", auth: "Bearer sk-teste" });
++    expect(one(captured).body).toMatch(/name="response_format"\r\n\r\nverbose_json/);
++  });
++
++  it("BUG-20261125-B4B3: sem o fetch global, o prazo do adaptador continua virando timeout e o motor fora do ar, unavailable", async () => {
++    reply = { status: 200, body: SPEACHES_OK, delayMs: 300 };
++    await expect(withoutGlobalFetch(() => transcriber({ minTimeoutMs: 50 }).transcribe({ audio, mimeType: "audio/ogg" }))).rejects.toMatchObject({ kind: "timeout" });
++    const down = createOpenAiCompatibleTranscriber({ url: "http://127.0.0.1:9", model: "m" });
++    await expect(withoutGlobalFetch(() => down.transcribe({ audio, mimeType: "audio/ogg" }))).rejects.toMatchObject({ kind: "unavailable" });
++    reply = { status: 200, body: "OK" };
++    expect(await withoutGlobalFetch(() => transcriber().health())).toBe(true);
++  });
++
+   it("health: 200 é saudável; erro ou fora do ar não", async () => {
+     reply = { status: 200, body: "OK" };
+     expect(await transcriber().health()).toBe(true);

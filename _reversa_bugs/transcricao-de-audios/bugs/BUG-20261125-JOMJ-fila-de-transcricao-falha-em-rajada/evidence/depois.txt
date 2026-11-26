@@ -1,0 +1,2 @@
+bytes=542392
+ok em 274 s; segmentos=94
