@@ -37,7 +37,7 @@ Comandos:
 - DoR local completa: `npm run dor`
 - Um teste isolado: `npx vitest run test/unit/agent/ask-question.test.ts -t "responde com citação"`
 
-Arquitetura (regras verificadas pelo dependency-cruiser): `src/modules/<módulo>/{domain,application,infrastructure}` com API pública só em `index.ts`; o núcleo nunca importa `src/channels/**`; só `src/main` compõe portas e implementações; `src/platform` não importa módulos. Os tipos em `src/contracts/channel/generated.ts` vêm de `contracts/channel/*.schema.json` (`npm run contracts:generate`), nunca são editados à mão. A `main` é protegida: todo merge passa por PR com os 7 jobs de `.github/workflows/pr.yml` verdes.
+Arquitetura (regras verificadas pelo dependency-cruiser): `src/modules/<módulo>/{domain,application,infrastructure}` com API pública só em `index.ts`; o núcleo nunca importa `src/channels/**`; só `src/main` compõe portas e implementações; `src/platform` não importa módulos. Os tipos em `src/contracts/channel/generated.ts` vêm de `contracts/channel/*.schema.json` (`npm run contracts:generate`), nunca são editados à mão. A `main` é protegida: todo merge passa por PR com os 7 jobs de `.github/workflows/pr.yml` verdes. A mutação é seletiva e incremental (ADR-0015): no PR, só roda quando muda `src/`, teste unitário ou configuração, e reaproveita pelo cache o resultado dos mutantes que não mudaram; a completa roda às segundas e sob demanda (`mutation-full.yml`).
 
 ## Requisitos de engenharia (fonte: `requirements.md`)
 

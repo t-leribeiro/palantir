@@ -89,15 +89,48 @@ jobs:
   mutation:
     name: mutation (≥ 60%)
     runs-on: ubuntu-24.04
-    # A S8 levou a mutação a ~26 min no runner (3.723 mutantes); 20 min cortava antes do fim. A nota mínima não muda.
+    # ADR-0015: só roda quando o PR mexe no que a mutação alcança, e é incremental (o Stryker reaproveita o
+    # resultado dos mutantes que não mudaram, guardado no cache). A execução completa fica em mutation-full.yml.
+    # A nota mínima (60%) vale sobre todos os mutantes, inclusive os reaproveitados.
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { fetch-depth: 2 }
+      - name: o que mudou alcança a mutação?
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # No pull_request o checkout é o commit de merge: o primeiro pai é a main de agora.
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$changed" | grep -qE '^(src/|test/unit/|test/support/|stryker\.config\.mjs$|vitest\.mutation\.config\.ts$|package(-lock)?\.json$|\.nvmrc$|\.github/workflows/pr\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Nenhum arquivo que a mutação alcança mudou (código, testes unitários ou configuração): mutação dispensada." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version-file: .nvmrc, cache: npm }
-      - run: npm ci --ignore-scripts
-      - run: npm run test:mutation
-      - if: always()
+      - if: steps.scope.outputs.run == 'true'
+        run: npm ci --ignore-scripts
+      - name: resultado incremental mais recente
+        if: steps.scope.outputs.run == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.run_id }}
+          restore-keys: stryker-incremental-
+      - if: steps.scope.outputs.run == 'true'
+        run: npm run test:mutation
+      - name: guardar o resultado incremental
+        if: always() && steps.scope.outputs.run == 'true' && hashFiles('reports/stryker-incremental.json') != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.run_id }}-${{ github.run_attempt }}
+      - if: always() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: mutation-report, path: reports/mutation/, if-no-files-found: ignore }
 
