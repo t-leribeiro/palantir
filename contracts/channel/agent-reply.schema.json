@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://palantir.local/contracts/channel/agent-reply.schema.json",
   "title": "AgentReply",
-  "description": "Resposta neutra do agente; cada adaptador renderiza para o seu canal (ADR-0004).",
+  "description": "Resposta neutra do agente; cada adaptador renderiza para o seu canal (ADR-0004). 1.4.0 adiciona media, o anexo por referência.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -89,6 +89,56 @@
           "audioEndS": [
             "audioStartS"
           ]
+        }
+      }
+    },
+    "media": {
+      "type": "array",
+      "maxItems": 1,
+      "description": "Anexo entregue depois do texto, por referência (1.4.0). Nunca leva bytes: o adaptador busca o arquivo pelo OutboundMediaLoader.",
+      "items": {
+        "title": "ReplyMedia",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ref",
+          "mimeType",
+          "sizeBytes",
+          "failureText"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "audio"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id do anexo (attachments.id)."
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "durationSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16777216,
+            "description": "Até 16 MB, o limite de áudio do WhatsApp."
+          },
+          "failureText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Enviado pelo adaptador quando não consegue entregar o anexo."
+          }
         }
       }
     }

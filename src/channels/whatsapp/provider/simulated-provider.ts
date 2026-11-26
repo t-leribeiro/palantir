@@ -1,5 +1,6 @@
 // Provedor WhatsApp simulado (feature 003, D-03): mesma porta do real, sem rede nem número. Usado pela
 // suíte de contrato, pelo E2E e pelos testes do adaptador.
+import { createHash } from "node:crypto";
 import { MediaUnavailableError } from "../../../contracts/channel/knowledge-channel.js";
 import { isGroupJid } from "./mapping.js";
 import type { GroupInfo, IncomingDirect, IncomingGroupMessage, SessionState, WhatsAppProvider } from "./provider.js";
@@ -7,6 +8,14 @@ import type { GroupInfo, IncomingDirect, IncomingGroupMessage, SessionState, Wha
 export interface SentText {
   readonly chatJid: string;
   readonly text: string;
+}
+
+/** Mensagem de voz enviada (feature 008): só o tamanho e o SHA-256, nunca os bytes. */
+export interface SentAudio {
+  readonly chatJid: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
 }
 
 export interface SimulatedProvider extends WhatsAppProvider {
@@ -19,6 +28,8 @@ export interface SimulatedProvider extends WhatsAppProvider {
   setState(state: SessionState, reason?: string): void;
   emitQr(qr: string): void;
   sent(): readonly SentText[];
+  /** Feature 008: mensagens de voz enviadas, na ordem. `clearSent` limpa as duas listas. */
+  sentAudios(): readonly SentAudio[];
   clearSent(): void;
   /** As próximas `count` chamadas de envio falham. */
   failNextSends(count: number): void;
@@ -33,6 +44,7 @@ export interface SimulatedProvider extends WhatsAppProvider {
 
 export function createSimulatedProvider(): SimulatedProvider {
   const sent: SentText[] = [];
+  const audios: SentAudio[] = [];
   const qrListeners: ((qr: string) => void)[] = [];
   const stateListeners: ((state: SessionState, reason?: string) => void)[] = [];
   let onDirect: ((message: IncomingDirect) => Promise<void>) | undefined;
@@ -66,6 +78,15 @@ export function createSimulatedProvider(): SimulatedProvider {
         throw new Error("falha simulada de envio");
       }
       sent.push({ chatJid, text });
+    },
+    async sendAudio(chatJid, audio, mimeType) {
+      if (isGroupJid(chatJid)) throw new Error("envio a grupo bloqueado");
+      if (!started) throw new Error("provedor simulado parado");
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error("falha simulada de envio");
+      }
+      audios.push({ chatJid, mimeType, sizeBytes: audio.length, sha256: createHash("sha256").update(audio).digest("hex") });
     },
     onGroupMessage(listener) {
       onGroup = listener;
@@ -113,8 +134,10 @@ export function createSimulatedProvider(): SimulatedProvider {
       for (const listener of qrListeners) listener(qr);
     },
     sent: () => [...sent],
+    sentAudios: () => [...audios],
     clearSent() {
       sent.length = 0;
+      audios.length = 0;
     },
     failNextSends(count) {
       failures = count;

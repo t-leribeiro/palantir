@@ -1,5 +1,5 @@
 import type { Queryable } from "../../../platform/db/index.js";
-import type { ConversationStateStore, PendingAction, StoredListing, StoredPending } from "../application/conversation-state.js";
+import type { CitationStore, ConversationStateStore, PendingAction, StoredCitation, StoredCitations, StoredListing, StoredPending } from "../application/conversation-state.js";
 import type { ListItem } from "../domain/conversation-ref.js";
 
 interface Row {
@@ -22,11 +22,17 @@ VALUES ($1, $2, $3, $4, now())
 ON CONFLICT (user_id, provider) DO UPDATE
   SET pending = EXCLUDED.pending, pending_expires_at = EXCLUDED.pending_expires_at, updated_at = now()`;
 
+const UPSERT_CITATIONS = `
+INSERT INTO agent_conversation_state (user_id, provider, citations, citations_at, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id, provider) DO UPDATE
+  SET citations = EXCLUDED.citations, citations_at = EXCLUDED.citations_at, updated_at = now()`;
+
 const CLEAR_PENDING = `
 UPDATE agent_conversation_state SET pending = NULL, pending_expires_at = NULL, updated_at = now()
  WHERE user_id = $1 AND provider = $2`;
 
-export function createPgConversationState(db: Queryable): ConversationStateStore {
+export function createPgConversationState(db: Queryable): ConversationStateStore & CitationStore {
   async function row(userId: string, provider: string): Promise<Row | undefined> {
     const { rows } = await db.query<Row>(
       "SELECT listing, listing_page, listing_at, pending, pending_expires_at FROM agent_conversation_state WHERE user_id = $1 AND provider = $2",
@@ -58,6 +64,17 @@ export function createPgConversationState(db: Queryable): ConversationStateStore
     },
     async clearPending(userId, provider) {
       await db.query(CLEAR_PENDING, [userId, provider]);
+    },
+    async citations(userId, provider): Promise<StoredCitations | null> {
+      const { rows } = await db.query<{ citations: StoredCitation[] | null; citations_at: Date | null }>(
+        "SELECT citations, citations_at FROM agent_conversation_state WHERE user_id = $1 AND provider = $2",
+        [userId, provider],
+      );
+      const r = rows[0];
+      return r?.citations && r.citations_at ? { items: r.citations, at: new Date(r.citations_at) } : null;
+    },
+    async saveCitations(userId, provider, { items, at }) {
+      await db.query(UPSERT_CITATIONS, [userId, provider, JSON.stringify(items), at]);
     },
   };
 }

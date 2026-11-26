@@ -7,7 +7,7 @@ let seq = 0;
 const PHONE = "+5511988887777";
 const JID = "5511988887777@s.whatsapp.net";
 
-runChannelContractSuite("whatsapp (provedor simulado)", () => {
+runChannelContractSuite("whatsapp (provedor simulado)", (options) => {
   const provider = createSimulatedProvider();
   const seen = new Set<string>();
   const channel = createWhatsAppChannel({
@@ -15,6 +15,7 @@ runChannelContractSuite("whatsapp (provedor simulado)", () => {
     receipts: { registerIfNew: async (p, id) => !seen.has(`${p}:${id}`) && Boolean(seen.add(`${p}:${id}`)) },
     pacerIntervalMs: 0,
     sendRetryDelaysMs: [],
+    ...(options?.loadMedia ? { loadMedia: options.loadMedia } : {}),
   });
   return {
     channel,
@@ -34,6 +35,9 @@ runChannelContractSuite("whatsapp (provedor simulado)", () => {
       deliveredReplies() {
         const sent = provider.sent();
         return sent.length === 0 ? [] : [{ destinationAccountId: `+${JID.split("@")[0]}`, parts: sent.map((s) => s.text) }];
+      },
+      deliveredMedia() {
+        return provider.sentAudios().map((a) => ({ destinationAccountId: `+${a.chatJid.split("@")[0]}`, sizeBytes: a.sizeBytes, sha256: a.sha256 }));
       },
     },
   };

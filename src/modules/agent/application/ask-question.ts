@@ -6,7 +6,10 @@ import { parseVerificationCode } from "../domain/command.js";
 import { helpReply, isHelpRequest, isTextual, textOnlyReply } from "../domain/help.js";
 import { MANAGEMENT_TEXT as T, info } from "../domain/management-replies.js";
 import { questionScope, type CatalogEntry } from "../domain/question.js";
+import { parseShowSource } from "../domain/show-source.js";
+import type { CitationStore } from "./conversation-state.js";
 import type { ManageSources } from "./manage-sources.js";
+import type { ShowSource } from "./show-source.js";
 
 /** Porta de geração de resposta (ADR-0007). A feature do agente adiciona uma implementação com LLM. */
 export interface AnswerGenerator {
@@ -46,6 +49,8 @@ export interface AskQuestionDeps {
   readonly manage?: ManageSources;
   /** Nomes das conversas do espaço, para o filtro por grupo na pergunta (feature 006, RN-11). */
   readonly catalog?: (spaceId: string) => Promise<readonly CatalogEntry[]>;
+  /** "mostra a N" (feature 008): onde ficam as citações da última resposta e o serviço que mostra a original. */
+  readonly showSource?: { readonly citations: CitationStore; readonly show: ShowSource };
 }
 
 type Sender =
@@ -92,19 +97,32 @@ export function createAskQuestion(deps: AskQuestionDeps): AskQuestion {
   };
 }
 
-/** Conta ativa e verificada: comando de gestão, ajuda ou pergunta, nessa ordem. */
-async function answerActive(
-  deps: AskQuestionDeps,
-  ctx: { readonly userId: string; readonly spaceId: string; readonly provider: string; readonly accountId: string },
-  question: string,
-): Promise<AgentReply> {
+type ActiveContext = { readonly userId: string; readonly spaceId: string; readonly provider: string; readonly accountId: string };
+
+/** Conta ativa e verificada: comando de gestão, "mostra a N", ajuda ou pergunta, nessa ordem. */
+async function answerActive(deps: AskQuestionDeps, ctx: ActiveContext, question: string): Promise<AgentReply> {
   if (question === "") return noEvidenceReply();
   const managed = await deps.manage?.(ctx, question);
   if (managed) return managed;
+  const index = deps.showSource ? parseShowSource(question) : null;
+  if (index !== null && deps.showSource) return deps.showSource.show(ctx, index);
   if (isHelpRequest(question)) return helpReply();
   const results = await searchInScope(deps, ctx.spaceId, question);
   if ("outcome" in results) return results;
-  return answerWithValidCitations(deps.generator, question, results);
+  return remember(deps, ctx, await answerWithValidCitations(deps.generator, question, results));
+}
+
+/** Feature 008 (D-02, D-03): só resposta com citações troca a lista, e só com ids e a faixa do trecho. */
+async function remember(deps: AskQuestionDeps, ctx: ActiveContext, reply: AgentReply): Promise<AgentReply> {
+  if (!deps.showSource || reply.outcome !== "answered" || reply.citations.length === 0) return reply;
+  const items = reply.citations.map((c) => ({
+    index: c.index,
+    messageId: c.messageId,
+    kind: c.kind ?? "text",
+    ...(c.audioStartS !== undefined && c.audioEndS !== undefined ? { audioStartS: c.audioStartS, audioEndS: c.audioEndS } : {}),
+  }));
+  await deps.showSource.citations.saveCitations(ctx.userId, ctx.provider, { items, at: new Date() });
+  return reply;
 }
 
 /**

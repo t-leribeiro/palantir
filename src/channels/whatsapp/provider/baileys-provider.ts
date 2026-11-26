@@ -374,5 +374,11 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
       if (!socket) throw new Error("WhatsApp desconectado");
       await withTimeout(socket.sendMessage(chatJid, { text }), SEND_TIMEOUT_MS);
     },
+    async sendAudio(chatJid, audio, mimeType, seconds) {
+      if (isGroupJid(chatJid)) throw new Error("envio a grupo bloqueado");
+      if (!socket) throw new Error("WhatsApp desconectado");
+      const duration = seconds === undefined ? {} : { seconds: Math.round(seconds) };
+      await withTimeout(socket.sendMessage(chatJid, { audio: Buffer.from(audio), mimetype: mimeType, ptt: true, ...duration }), SEND_TIMEOUT_MS);
+    },
   };
 }

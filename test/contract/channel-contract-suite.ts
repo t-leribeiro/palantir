@@ -1,11 +1,14 @@
 // T024 / RF-08: suíte de contrato reutilizável. Todo adaptador de canal precisa passar nela.
-// Uso: runChannelContractSuite("fake", () => createHarness()).
+// Uso: runChannelContractSuite("fake", (options) => createHarness(options)).
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   MediaUnavailableError,
   type AgentReply,
   type CanonicalMessage,
   type KnowledgeChannel,
+  type OutboundMediaLoader,
+  type ReplyMedia,
 } from "../../src/contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../src/platform/contracts/validator.js";
 
@@ -25,6 +28,13 @@ export interface ChannelDriver {
   simulateInboundAudio?(bytes: Uint8Array): Promise<void>;
   /** Os próximos `count` downloads de mídia falham. */
   failNextDownloads?(count: number): void;
+  /** Feature 008: anexos que o provedor recebeu do adaptador, na ordem (canais com mídia). */
+  deliveredMedia?(): readonly { destinationAccountId: string; sizeBytes: number; sha256: string }[];
+}
+
+/** Opções de construção do adaptador na suíte (feature 008: o loader do anexo da resposta). */
+export interface HarnessOptions {
+  readonly loadMedia?: OutboundMediaLoader;
 }
 
 export interface ChannelHarness {
@@ -32,10 +42,10 @@ export interface ChannelHarness {
   driver: ChannelDriver;
 }
 
-export function runChannelContractSuite(name: string, create: () => ChannelHarness | Promise<ChannelHarness>): void {
+export function runChannelContractSuite(name: string, create: (options?: HarnessOptions) => ChannelHarness | Promise<ChannelHarness>): void {
   describe(`contrato do canal: ${name}`, () => {
-    async function connected() {
-      const harness = await create();
+    async function connected(options?: HarnessOptions) {
+      const harness = await create(options);
       const inbound: CanonicalMessage[] = [];
       const toAgent: CanonicalMessage[] = [];
       harness.channel.onMessage(async (m) => {
@@ -142,6 +152,46 @@ export function runChannelContractSuite(name: string, create: () => ChannelHarne
       await expect(channel.fetchMedia(ref)).rejects.toMatchObject({ reason: "download_failed" });
       expect(inbound).toHaveLength(1);
       expect((await channel.fetchMedia(ref)).bytes).toHaveLength(3);
+    });
+
+    const AUDIO = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 1, 2, 3]);
+    const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+    const withMedia = (): AgentReply => {
+      const media: ReplyMedia = { kind: "audio", ref: "0a05cfd1-7a02-4687-86d3-dbe8526cf836", mimeType: "audio/ogg; codecs=opus", sizeBytes: AUDIO.length, failureText: "Não consegui mandar o arquivo do áudio agora." };
+      const citation = { index: 1, messageId: "6f1c8a52-1d3e-4a4b-9a0e-2b4f0c9d7e11", author: "Ana", sourceTitle: "T3", sentAt: "2026-11-12T13:00:00.000Z", kind: "audio" as const };
+      return { text: "[1] Ana em T3, áudio de 0:07. Mando o áudio em seguida.", outcome: "answered", citations: [citation], media: [media] };
+    };
+    const allText = (driver: ChannelDriver) => driver.deliveredReplies().flatMap((r) => r.parts).join("\n");
+
+    it("anexo (1.4.0): entrega o texto e depois o áudio pelo loader, com os mesmos bytes", async (ctx) => {
+      const asked: string[] = [];
+      const loadMedia: OutboundMediaLoader = async (destination, ref) => (asked.push(`${destination}|${ref}`), { bytes: AUDIO, mimeType: "audio/ogg; codecs=opus" });
+      const { channel, driver } = await connected({ loadMedia });
+      if (!channel.capabilities().supportsMedia || !driver.deliveredMedia) ctx.skip();
+      const destination = driver.replyDestination ?? "destino-1";
+      await channel.sendReply(destination, withMedia());
+      expect(allText(driver)).toContain("Mando o áudio em seguida.");
+      expect(allText(driver)).not.toContain("Não consegui mandar");
+      expect(asked).toEqual([`${destination}|0a05cfd1-7a02-4687-86d3-dbe8526cf836`]);
+      expect(driver.deliveredMedia?.()).toEqual([{ destinationAccountId: destination, sizeBytes: AUDIO.length, sha256: sha256(AUDIO) }]);
+    });
+
+    it("anexo (1.4.0): loader que falha entrega o texto de falha e nenhum áudio", async (ctx) => {
+      const { channel, driver } = await connected({ loadMedia: async () => Promise.reject(new MediaUnavailableError("download_failed")) });
+      if (!channel.capabilities().supportsMedia || !driver.deliveredMedia) ctx.skip();
+      await channel.sendReply(driver.replyDestination ?? "destino-1", withMedia());
+      expect(allText(driver)).toContain("Não consegui mandar o arquivo do áudio agora.");
+      expect(driver.deliveredMedia?.()).toEqual([]);
+    });
+
+    it("anexo (1.4.0): sem loader, entrega o texto de falha; resposta sem anexo não entrega áudio", async (ctx) => {
+      const { channel, driver } = await connected();
+      if (!channel.capabilities().supportsMedia || !driver.deliveredMedia) ctx.skip();
+      const destination = driver.replyDestination ?? "destino-1";
+      await channel.sendReply(destination, withMedia());
+      expect(allText(driver)).toContain("Não consegui mandar o arquivo do áudio agora.");
+      await channel.sendReply(destination, { text: "sem anexo", outcome: "no_evidence", citations: [] });
+      expect(driver.deliveredMedia?.()).toEqual([]);
     });
 
     it("volta a entregar mensagens depois de reconectar", async () => {

@@ -59,7 +59,7 @@ export interface CanonicalMessage {
 }
 
 /**
- * Resposta neutra do agente; cada adaptador renderiza para o seu canal (ADR-0004).
+ * Resposta neutra do agente; cada adaptador renderiza para o seu canal (ADR-0004). 1.4.0 adiciona media, o anexo por referência.
  */
 export interface AgentReply {
   text: string;
@@ -68,6 +68,12 @@ export interface AgentReply {
    * @maxItems 20
    */
   citations: Citation[];
+  /**
+   * Anexo entregue depois do texto, por referência (1.4.0). Nunca leva bytes: o adaptador busca o arquivo pelo OutboundMediaLoader.
+   *
+   * @maxItems 1
+   */
+  media?: ReplyMedia[];
 }
 export interface Citation {
   index: number;
@@ -87,4 +93,21 @@ export interface Citation {
    * Fim do trecho citado no áudio, em segundos (1.3.0).
    */
   audioEndS?: number;
+}
+export interface ReplyMedia {
+  kind: "audio";
+  /**
+   * Id do anexo (attachments.id).
+   */
+  ref: string;
+  mimeType: string;
+  durationSeconds?: number;
+  /**
+   * Até 16 MB, o limite de áudio do WhatsApp.
+   */
+  sizeBytes: number;
+  /**
+   * Enviado pelo adaptador quando não consegue entregar o anexo.
+   */
+  failureText: string;
 }

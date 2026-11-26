@@ -4,8 +4,9 @@ import { runChannelContractSuite } from "./channel-contract-suite.js";
 
 let seq = 0;
 
-runChannelContractSuite("fake", () => {
+runChannelContractSuite("fake", (options) => {
   const channel = createFakeChannel({
+    ...(options?.loadMedia ? { loadMedia: options.loadMedia } : {}),
     conversations: [{ conversationId: "fake-group-1", title: "Grupo de teste", kind: "group" }],
   });
   return {
@@ -45,6 +46,12 @@ runChannelContractSuite("fake", () => {
       },
       deliveredReplies() {
         return channel.outbox().map((item) => ({ destinationAccountId: item.destinationAccountId, parts: item.parts }));
+      },
+      deliveredMedia() {
+        return channel
+          .outbox()
+          .flatMap((item) => (item.media ?? []).filter((m) => m.outcome === "sent").map((m) => ({ destinationAccountId: item.destinationAccountId, sizeBytes: m.sizeBytes, sha256: m.sha256 ?? "" })))
+          .reverse();
       },
     },
   };

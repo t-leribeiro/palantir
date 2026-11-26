@@ -9,8 +9,8 @@ import { one } from "../support/rows.js";
 let db: TestDatabase;
 let userId: string;
 
-// A 0008 deixou de ser a última (feature 007): desfaz e refaz também as posteriores a ela.
-const step = (direction: "up" | "down", count = 2) =>
+// A 0008 deixou de ser a última (features 007 e 008): desfaz e refaz também as posteriores a ela.
+const step = (direction: "up" | "down", count = 3) =>
   runner({ databaseUrl: db.url, dir: MIGRATIONS_DIR, direction, count, migrationsTable: "pgmigrations", singleTransaction: true, log: () => undefined });
 
 beforeAll(async () => {

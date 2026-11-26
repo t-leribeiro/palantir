@@ -13,9 +13,10 @@ function paths(value: unknown): string[] {
 }
 
 describe("contrato 1.3.0: anexo de mídia", () => {
-  it("a versão do contrato é 1.3.0, aditiva sobre a 1.2.0", () => {
-    expect(CONTRACT_VERSION).toBe("1.3.0");
+  it("a versão do contrato é 1.4.0 (feature 008), aditiva sobre a 1.3.0 e a 1.2.0", () => {
+    expect(CONTRACT_VERSION).toBe("1.4.0");
     expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.2.0" })).ok).toBe(true);
+    expect(validateCanonicalMessage(canonicalMessage({ contractVersion: "1.3.0" })).ok).toBe(true);
   });
 
   it("aceita áudio anunciado pelo canal, ainda não preparado (só fetchRef)", () => {
@@ -80,5 +81,36 @@ describe("contrato 1.3.0: citação de áudio", () => {
   it("início sem fim (ou o contrário) é recusado", () => {
     const reply = { text: "x", outcome: "answered", citations: [{ ...citation, kind: "audio", audioStartS: 3 }] };
     expect(validateAgentReply(reply).ok).toBe(false);
+  });
+});
+
+describe("contrato 1.4.0: anexo de áudio na resposta (feature 008, D-07)", () => {
+  const citation = { index: 1, messageId: "6f1c8a52-1d3e-4a4b-9a0e-2b4f0c9d7e11", author: "Ana", sourceTitle: "T3", sentAt: "2026-11-12T13:00:00.000Z" };
+  const media = {
+    kind: "audio",
+    ref: "0a05cfd1-7a02-4687-86d3-dbe8526cf836",
+    mimeType: "audio/ogg; codecs=opus",
+    durationSeconds: 102,
+    sizeBytes: 54_321,
+    failureText: "Não consegui mandar o arquivo do áudio agora.",
+  };
+  const reply = (extra: object) => ({ text: "[1] Ana em T3…", outcome: "answered", citations: [citation], ...extra });
+
+  it("aceita um anexo por referência; resposta sem anexo continua válida", () => {
+    expect(validateAgentReply(reply({ media: [media] })).ok).toBe(true);
+    expect(validateAgentReply(reply({})).ok).toBe(true);
+  });
+
+  it("recusa dois anexos, mais de 16 MB, ref fora de uuid, tipo que não é áudio e anexo sem texto de falha", () => {
+    expect(validateAgentReply(reply({ media: [media, media] })).ok).toBe(false);
+    expect(validateAgentReply(reply({ media: [{ ...media, sizeBytes: 16 * 1024 * 1024 + 1 }] })).ok).toBe(false);
+    expect(validateAgentReply(reply({ media: [{ ...media, ref: "storage/key.ogg" }] })).ok).toBe(false);
+    expect(validateAgentReply(reply({ media: [{ ...media, kind: "image" }] })).ok).toBe(false);
+    const { failureText: _f, ...semTexto } = media;
+    expect(validateAgentReply(reply({ media: [semTexto] })).ok).toBe(false);
+  });
+
+  it("os bytes nunca vão na resposta", () => {
+    expect(validateAgentReply(reply({ media: [{ ...media, bytes: "T2dnUw==" }] })).ok).toBe(false);
   });
 });
