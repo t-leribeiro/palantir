@@ -14,6 +14,8 @@ export {
 } from "./domain/media-policy.js";
 export { aggregateWer, normalizeForWer, werCount, type WerCount } from "./domain/wer.js";
 export { createMediaPurger, sourcePrefix, type SourceMediaPurger } from "./application/purge-source.js";
+export { createLoadOutboundMedia, type LoadOutboundMediaDeps, type OutboundMediaLookup } from "./application/load-outbound-media.js";
+export { createPgOutboundMediaLookup } from "./infrastructure/pg-outbound-media.js";
 export {
   TranscriberError,
   type AttachmentForProcessing,

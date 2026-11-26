@@ -50,4 +50,25 @@ describe("estado curto da conversa", () => {
     expect(await state.pending(userId, "fake")).toBeNull();
     expect(await state.listing(userId, "fake")).not.toBeNull();
   });
+
+  it("feature 008 (D-02, D-03): as citações da última resposta ficam por usuário e canal, sem mexer na lista nem na pendente", async () => {
+    const state = createPgConversationState(db.pool);
+    expect(await state.citations(userId, "fake")).toBeNull();
+    const at = new Date("2026-11-25T21:00:00Z");
+    const items = [
+      { index: 1, messageId: "6f1c8a52-1d3e-4a4b-9a0e-2b4f0c9d7e11", kind: "audio", audioStartS: 37, audioEndS: 45 },
+      { index: 2, messageId: "0a05cfd1-7a02-4687-86d3-dbe8526cf836", kind: "text" },
+    ];
+    const listingBefore = await state.listing(userId, "fake");
+    await state.savePending(userId, "fake", { pending: { action: "follow", ref: "group:9@g.us", title: "Y" }, expiresAt: now });
+    await state.saveCitations(userId, "fake", { items, at });
+    expect(await state.citations(userId, "fake")).toEqual({ items, at });
+    expect(await state.citations(userId, "whatsapp")).toBeNull();
+    expect(await state.listing(userId, "fake")).toEqual(listingBefore);
+    expect((await state.pending(userId, "fake"))?.pending.ref).toBe("group:9@g.us");
+    await state.saveCitations(userId, "fake", { items: items.slice(1), at: now });
+    expect((await state.citations(userId, "fake"))?.items).toHaveLength(1);
+    const { rows } = await db.pool.query<{ citations: string }>("SELECT citations::text FROM agent_conversation_state WHERE user_id = $1 AND provider = 'fake'", [userId]);
+    expect(rows[0]?.citations).not.toMatch(/Ana|T3|texto/);
+  });
 });

@@ -10,7 +10,7 @@ import {
   type WhatsAppChannel,
   type WhatsAppObserver,
 } from "../channels/whatsapp/whatsapp-channel.js";
-import type { InboundHandler, IngestOutcome } from "../contracts/channel/knowledge-channel.js";
+import type { InboundHandler, IngestOutcome, OutboundMediaLoader } from "../contracts/channel/knowledge-channel.js";
 import { createAskQuestion, createDeterministicAnswerGenerator, createPgInboundReceipts, type UnknownSenderPolicy } from "../modules/agent/index.js";
 import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../modules/identity/index.js";
 import { INDEX_QUEUE, createIngestMessage, createPgUnitOfWork } from "../modules/ingestion/index.js";
@@ -36,6 +36,7 @@ import { AGENT_NOTIFY_QUEUE_DEFINITIONS, SOURCE_DELETE_QUEUE_DEFINITION, buildAg
 import { startDeletionNotices } from "./notify.js";
 import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, withMediaPreparation } from "./media.js";
 import { buildSearchParts, startSemanticIndexing, tracedIndex, type SearchCompositionOptions } from "./search.js";
+import { buildOutboundMedia, buildShowSource } from "./show-source.js";
 
 export const QUEUES: readonly QueueDefinition[] = [
   { name: INDEX_QUEUE, retryLimit: 5, retryDelaySeconds: 2, expireInSeconds: 60, deadLetter: `${INDEX_QUEUE}.dead` },
@@ -79,7 +80,7 @@ export interface ApiHandle {
 
 /**
  * Agente com identidade, busca e resposta determinística (ADR-0007); a política vem do canal. Desde a feature 006,
- * com verificação de conta, comandos de gestão e filtro por grupo na pergunta.
+ * com verificação de conta, comandos de gestão e filtro por grupo na pergunta; desde a 008, com "mostra a N".
  */
 function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender: UnknownSenderPolicy, searchOptions?: SearchCompositionOptions) {
   const search = createSearchEvidence({
@@ -96,6 +97,7 @@ function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender:
     accounts: management.accounts,
     manage: management.manage,
     catalog: management.catalog,
+    showSource: buildShowSource(pool),
   });
 }
 
@@ -104,7 +106,8 @@ export async function buildApi(config: AppConfig, options: CompositionOptions = 
   const ingest = buildIngest(pool, queue);
   const ask = buildAsk(config, pool, queue, "reply", options.search);
 
-  const channel = createFakeChannel({ onInvalid: () => metrics.channelInvalid("fake") });
+  const loadMedia = buildOutboundMedia(config, pool, "fake", logger);
+  const channel = createFakeChannel({ onInvalid: () => metrics.channelInvalid("fake"), ...(loadMedia ? { loadMedia } : {}) });
   channel.onMessage((message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))));
   channel.onAgentMessage((message) =>
     withSpan("agent.ask", async () => {
@@ -260,8 +263,15 @@ function buildCaptureChannel(options: WhatsAppCompositionOptions, wiring: Captur
   return channel;
 }
 
-/** Número do agente: responde sempre; no modo `agent`, também captura (D-02). */
-function buildAgentChannel(options: WhatsAppCompositionOptions, mode: CaptureMode, wiring: CaptureWiring, receipts: InboundReceiptsPort, log: ObserverLog): WhatsAppChannel {
+/** Número do agente: responde sempre; no modo `agent`, também captura (D-02). Manda o áudio do "mostra a N" (008). */
+function buildAgentChannel(
+  options: WhatsAppCompositionOptions,
+  mode: CaptureMode,
+  wiring: CaptureWiring,
+  receipts: InboundReceiptsPort,
+  log: ObserverLog,
+  loadMedia: OutboundMediaLoader | undefined,
+): WhatsAppChannel {
   const captures = mode === "agent" && wiring.ports !== undefined;
   const channel = createWhatsAppChannel({
     provider: options.provider,
@@ -269,6 +279,7 @@ function buildAgentChannel(options: WhatsAppCompositionOptions, mode: CaptureMod
     observer: options.observer ?? createOtelWhatsAppObserver(undefined, log, "agent"),
     roles: { answer: true, capture: captures },
     ...(captures ? { capturePorts: wiring.ports, captureMediaKinds: wiring.mediaKinds } : {}),
+    ...(loadMedia ? { loadMedia } : {}),
   });
   if (captures && wiring.ingestFor) channel.onMessage(wiring.ingestFor(channel));
   return channel;
@@ -306,7 +317,7 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   const log = { info: (m: string) => logger.info(m), warn: (m: string) => logger.warn(m), error: (m: string) => logger.error(m) };
   const mode = config.whatsapp.capture;
   const wiring = await wireCapture(config, pool, queue, metrics, logger);
-  const channel = buildAgentChannel(options, mode, wiring, receipts, log);
+  const channel = buildAgentChannel(options, mode, wiring, receipts, log, buildOutboundMedia(config, pool, "whatsapp", logger));
   const captureChannel = mode === "dedicated" ? buildCaptureChannel(options, wiring, receipts, log) : undefined;
   channel.onAgentMessage(answerWith(ask, metrics, logger));
   const server = await buildHttpServer({

@@ -273,6 +273,39 @@
           "legendFormat": "{{outcome}}"
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pedidos de mensagem original (\"mostra a N\") por resultado",
+      "description": "shown: mostrada; no_recent: sem resposta com citações nas últimas 2 h; out_of_range: número fora da resposta; deleted: conversa apagada; not_found: mensagem não existe mais.",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(agent_show_source_total[1h]))",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     }
   ]
 }

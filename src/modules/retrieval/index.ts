@@ -23,6 +23,15 @@ export {
   type VerifierCandidate,
 } from "./application/search-evidence.js";
 export { createPgSearchIndex } from "./infrastructure/pg-search-index.js";
+export {
+  CONTEXT_NEIGHBORS,
+  type CitedMessage,
+  type ContextMessage,
+  type SourceAudio,
+  type SourceContext,
+  type SourceContextResult,
+} from "./application/source-context.js";
+export { createPgSourceContext } from "./infrastructure/pg-source-context.js";
 export { TYPESAFE_VERIFIER, createTypeSafeVerifier, systemOneBody, type TypeSafeVerifierOptions } from "./infrastructure/verifiers/typesafe.js";
 export { createFakeVerifier } from "./infrastructure/verifiers/fake.js";
 export { createOtelSearchObserver } from "./infrastructure/otel-search-observer.js";

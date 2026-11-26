@@ -201,3 +201,57 @@ describe("validateCitations", () => {
     expect(validateCitations([], [ALLOY], "answered")).toBe(false);
   });
 });
+
+describe("agente: 'mostra a N' (feature 008, D-01, D-03)", () => {
+  function withShow(results: () => Evidence[]) {
+    const saved: { userId: string; provider: string; items: readonly unknown[] }[] = [];
+    const shown: number[] = [];
+    let searches = 0;
+    const ask = createAskQuestion({
+      identity: { resolve: async () => ({ userId: "user-1", spaceId: "space-1" }) },
+      search: {
+        async search() {
+          searches += 1;
+          const r = results();
+          return { results: r, lowConfidence: r.length === 0 };
+        },
+      },
+      generator: createDeterministicAnswerGenerator(),
+      showSource: {
+        citations: { citations: async () => null, saveCitations: async (userId, provider, c) => void saved.push({ userId, provider, items: c.items }) },
+        show: async (_ctx, index) => (shown.push(index), { text: `original ${index}`, outcome: "answered", citations: [] }),
+      },
+    });
+    const send = (text: string) => ask({ ...question, text });
+    return { send, saved, shown, searches: () => searches };
+  }
+
+  it("guarda só ids e a faixa das citações de cada resposta com citações; 'não encontrei' não guarda", async () => {
+    let results: Evidence[] = [{ ...ALLOY, kind: "audio", audioStartS: 37, audioEndS: 45 }, evidence(2)];
+    const { send, saved } = withShow(() => results);
+    await send("quem falou do Grafana Alloy?");
+    expect(saved).toEqual([
+      {
+        userId: "user-1",
+        provider: "fake",
+        items: [
+          { index: 1, messageId: ALLOY.messageId, kind: "audio", audioStartS: 37, audioEndS: 45 },
+          { index: 2, messageId: evidence(2).messageId, kind: "text" },
+        ],
+      },
+    ]);
+    results = [];
+    expect((await send("quem falou de Kubernetes?"))?.outcome).toBe("no_evidence");
+    expect(saved).toHaveLength(1);
+  });
+
+  it("'mostra a 2' vai ao serviço sem buscar; frase com 'mostra' continua pergunta; a ajuda ensina o comando", async () => {
+    const { send, shown, searches } = withShow(() => [ALLOY]);
+    expect((await send("Mostra a 2"))?.text).toBe("original 2");
+    expect(shown).toEqual([2]);
+    expect(searches()).toBe(0);
+    await send("me mostra o que a Ana disse do Alloy");
+    expect(searches()).toBe(1);
+    expect((await send("ajuda"))?.text).toContain('"mostra a 2"');
+  });
+});

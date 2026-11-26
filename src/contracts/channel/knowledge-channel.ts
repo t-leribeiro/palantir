@@ -2,9 +2,9 @@
 // o núcleo só conhece CanonicalMessage e AgentReply.
 import type { AgentReply, CanonicalMessage } from "./generated.js";
 
-export type { AgentReply, CanonicalMessage, Citation } from "./generated.js";
+export type { AgentReply, CanonicalMessage, Citation, ReplyMedia } from "./generated.js";
 
-export const CONTRACT_VERSION = "1.3.0";
+export const CONTRACT_VERSION = "1.4.0";
 
 export interface ConversationRef {
   readonly conversationId: string;
@@ -65,6 +65,14 @@ export interface MediaContent {
   readonly bytes: Uint8Array;
   readonly mimeType: string;
 }
+
+/**
+ * Busca os bytes de um anexo da resposta (`AgentReply.media[].ref`, 1.4.0). Injetada pelo `src/main` em cada
+ * adaptador; a implementação só entrega o anexo à conta dona do espaço dele e decifra só na memória (feature 008,
+ * D-08). Falha com `MediaUnavailableError`: `expired` quando não há o anexo para essa conta, `download_failed`
+ * quando o armazenamento não responde.
+ */
+export type OutboundMediaLoader = (destinationAccountId: string, ref: string) => Promise<MediaContent>;
 
 /** Por que o binário não está disponível; `download_failed` admite nova tentativa, os demais não. */
 export type MediaUnavailableReason = "unsupported" | "expired" | "download_failed" | "too_large";

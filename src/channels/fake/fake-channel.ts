@@ -1,5 +1,7 @@
 // Adaptador de canal de teste (RF-07, D-12). Simula um provedor: mensagens entram por chamada direta
-// (rotas HTTP do esqueleto ou testes) e as respostas ficam registradas em memória.
+// (rotas HTTP do esqueleto ou testes) e as respostas ficam registradas em memória. Desde a feature 008, o anexo
+// da resposta é buscado pelo loader injetado e registrado só com o tamanho e o SHA-256, nunca os bytes.
+import { createHash } from "node:crypto";
 import type {
   AgentHandler,
   AgentReply,
@@ -9,6 +11,8 @@ import type {
   InboundHandler,
   IngestOutcome,
   KnowledgeChannel,
+  OutboundMediaLoader,
+  ReplyMedia,
 } from "../../contracts/channel/knowledge-channel.js";
 import { CONTRACT_VERSION, MediaUnavailableError } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
@@ -43,12 +47,23 @@ export interface FakeAgentMessage {
   readonly text: string;
 }
 
+/** Anexo da resposta como o canal de teste o entregou (feature 008): `sent`, ou o texto de falha no lugar. */
+export interface OutboxMedia {
+  readonly ref: string;
+  readonly kind: ReplyMedia["kind"];
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly sha256?: string;
+  readonly outcome: "sent" | "failed" | "missing";
+}
+
 export interface OutboxItem {
   readonly destinationAccountId: string;
   readonly reply: AgentReply;
   readonly parts: readonly string[];
   readonly rendered: string;
   readonly sentAt: string;
+  readonly media?: readonly OutboxMedia[];
 }
 
 export interface FakeChannelOptions {
@@ -57,6 +72,20 @@ export interface FakeChannelOptions {
   readonly clock?: Clock;
   /** Chamado a cada mensagem rejeitada pelo contrato (métrica channel_invalid_messages_total). */
   readonly onInvalid?: () => void;
+  /** Busca os bytes do anexo da resposta (contrato 1.4.0); sem ele, o anexo vira o texto de falha. */
+  readonly loadMedia?: OutboundMediaLoader;
+}
+
+/** Entrega o anexo pelo loader; na falha, o texto de falha da resposta entra nas partes (D-10). */
+async function deliverMedia(load: OutboundMediaLoader | undefined, destination: string, media: ReplyMedia): Promise<OutboxMedia> {
+  const base = { ref: media.ref, kind: media.kind, mimeType: media.mimeType, sizeBytes: media.sizeBytes };
+  if (!load) return { ...base, outcome: "missing" };
+  try {
+    const { bytes, mimeType } = await load(destination, media.ref);
+    return { ...base, mimeType, sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), outcome: "sent" };
+  } catch {
+    return { ...base, outcome: "failed" };
+  }
 }
 
 export interface FakeChannel extends KnowledgeChannel {
@@ -177,7 +206,14 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
     },
     async sendReply(destinationAccountId, reply) {
       const parts = splitForChannel(reply, MAX_MESSAGE_LENGTH);
-      sent.unshift({ destinationAccountId, reply, parts, rendered: parts.join("\n"), sentAt: clock.now().toISOString() });
+      const media: OutboxMedia[] = [];
+      for (const item of reply.media ?? []) {
+        const delivered = await deliverMedia(options.loadMedia, destinationAccountId, item);
+        media.push(delivered);
+        if (delivered.outcome !== "sent") parts.push(item.failureText);
+      }
+      const extra = media.length > 0 ? { media } : {};
+      sent.unshift({ destinationAccountId, reply, parts, rendered: parts.join("\n"), sentAt: clock.now().toISOString(), ...extra });
       sent.length = Math.min(sent.length, MAX_OUTBOX);
     },
     async receiveInbound(input) {

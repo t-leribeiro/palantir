@@ -43,11 +43,12 @@ export function fakeChannelRoutes(channel: FakeChannel): FastifyPluginAsync {
       `${BASE}/outbox`,
       { schema: { querystring: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100, default: 20 } } } } },
       async (request) => ({
-        items: channel.outbox(request.query.limit).map(({ destinationAccountId, reply, rendered, sentAt }) => ({
+        items: channel.outbox(request.query.limit).map(({ destinationAccountId, reply, rendered, sentAt, media }) => ({
           destinationAccountId,
           reply,
           rendered,
           sentAt,
+          ...(media ? { media } : {}),
         })),
       }),
     );

@@ -144,6 +144,21 @@ components:
         reply: { $ref: "./channel/agent-reply.schema.json" }
         rendered: { type: string }
         sentAt: { type: string, format: date-time }
+        media:
+          description: Anexos da resposta como o canal de teste os entregou (contrato 1.4.0). Só tamanho e SHA-256, nunca os bytes.
+          type: array
+          items: { $ref: "#/components/schemas/OutboxMedia" }
+    OutboxMedia:
+      type: object
+      additionalProperties: false
+      required: [ref, kind, mimeType, sizeBytes, outcome]
+      properties:
+        ref: { type: string, format: uuid }
+        kind: { type: string, enum: [audio] }
+        mimeType: { type: string }
+        sizeBytes: { type: integer, minimum: 1 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        outcome: { type: string, enum: [sent, failed, missing] }
     Outbox:
       type: object
       additionalProperties: false

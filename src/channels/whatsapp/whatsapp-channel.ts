@@ -9,6 +9,8 @@ import type {
   ChannelCapabilities,
   InboundHandler,
   KnowledgeChannel,
+  OutboundMediaLoader,
+  ReplyMedia,
 } from "../../contracts/channel/knowledge-channel.js";
 import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
@@ -33,6 +35,8 @@ export interface WhatsAppObserver extends CaptureObserver {
   sendFailed(): void;
   handlerFailed(): void;
   state(state: SessionState): void;
+  /** Anexo da resposta (feature 008, D-12): entregue, falhou ou sem loader. */
+  mediaSent?(outcome: "sent" | "failed" | "missing"): void;
 }
 
 const noopObserver: WhatsAppObserver = {
@@ -75,6 +79,8 @@ export interface WhatsAppChannelOptions {
   readonly capturePorts?: CapturePorts;
   /** Tipos de mídia de grupo que viram mensagem (feature 005; vem de PALANTIR_MEDIA_STORE_KINDS). */
   readonly captureMediaKinds?: readonly DirectKind[];
+  /** Busca os bytes do anexo da resposta (contrato 1.4.0, D-08); sem ele, o anexo vira o texto de falha. */
+  readonly loadMedia?: OutboundMediaLoader;
 }
 
 export interface WhatsAppChannel extends KnowledgeChannel {
@@ -172,11 +178,45 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
     }
   }
 
-  async function deliver(chatJid: string, reply: AgentReply): Promise<void> {
+  async function sendAudioWithRetry(chatJid: string, bytes: Uint8Array, media: ReplyMedia): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await provider.sendAudio(chatJid, bytes, media.mimeType, media.durationSeconds);
+        return;
+      } catch (error) {
+        const delay = retryDelays[attempt];
+        if (delay === undefined) throw error;
+        await systemPacerClock.sleep(delay);
+      }
+    }
+  }
+
+  /**
+   * Anexo depois do texto (D-10). `accountId` é a conta do dono em E.164, que o loader confere; `chatJid` é para
+   * onde enviar (pode ser um LID). Falhou ou não há loader: vai o texto de falha da resposta.
+   */
+  async function deliverMedia(chatJid: string, accountId: string, media: ReplyMedia): Promise<void> {
+    let outcome: "sent" | "failed" | "missing" = "missing";
+    try {
+      if (options.loadMedia) {
+        outcome = "failed";
+        const { bytes } = await options.loadMedia(accountId, media.ref);
+        await pacer.send(chatJid, () => sendAudioWithRetry(chatJid, bytes, media));
+        outcome = "sent";
+      }
+    } catch {
+      // segue para o texto de falha
+    }
+    observer.mediaSent?.(outcome);
+    if (outcome !== "sent") await pacer.send(chatJid, () => sendWithRetry(chatJid, media.failureText));
+  }
+
+  async function deliver(chatJid: string, reply: AgentReply, accountId: string): Promise<void> {
     const parts = renderForWhatsApp(reply);
     try {
       for (const part of parts) await pacer.send(chatJid, () => sendWithRetry(chatJid, part));
       observer.replied(parts.length);
+      for (const media of reply.media ?? []) await deliverMedia(chatJid, accountId, media);
     } catch {
       observer.sendFailed();
     }
@@ -223,7 +263,7 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
     }
     const reply = await ask(valid.value);
     if (reply === null) observer.unknownSender("unknown");
-    if (reply) await deliver(message.chatJid, reply);
+    if (reply) await deliver(message.chatJid, reply, message.senderPhone);
   }
 
   provider.onDirectMessage(handleDirect);
@@ -270,7 +310,7 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
       onAgent = handler;
     },
     async sendReply(destinationAccountId, reply) {
-      await deliver(toChatJid(destinationAccountId), reply);
+      await deliver(toChatJid(destinationAccountId), reply, destinationAccountId);
     },
     /** O núcleo só chama depois de conferir a autorização (D-03); a referência vale por pouco tempo. */
     async fetchMedia(fetchRef) {

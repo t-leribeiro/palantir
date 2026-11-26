@@ -59,6 +59,8 @@ export interface WhatsAppProvider {
   onDirectMessage(listener: (message: IncomingDirect) => Promise<void>): void;
   /** Recusa destino de grupo: nenhum número escreve em grupos (RN-08 da S3, D-15). */
   sendText(chatJid: string, text: string): Promise<void>;
+  /** Mensagem de voz (feature 008, D-09), só em resposta ao dono; recusa grupo, como `sendText`. */
+  sendAudio(chatJid: string, audio: Uint8Array, mimeType: string, seconds?: number): Promise<void>;
   /** Mensagens de grupo; só chegam com `acceptGroups` (feature 004). */
   onGroupMessage(listener: (message: IncomingGroupMessage) => Promise<void>): void;
   /** Grupos do número; `complete` = lista inteira (quem não está nela saiu). */

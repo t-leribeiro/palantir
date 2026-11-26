@@ -24,7 +24,7 @@ export {
   type UnknownSenderPolicy,
 } from "./application/ask-question.js";
 export { AGENT_NOTIFY_QUEUE, type AgentNotifyJob } from "./domain/notification.js";
-export type { ConversationStateStore, PendingAction, StoredListing, StoredPending } from "./application/conversation-state.js";
+export type { CitationStore, ConversationStateStore, PendingAction, StoredCitation, StoredCitations, StoredListing, StoredPending } from "./application/conversation-state.js";
 export { createPgConversationState } from "./infrastructure/pg-conversation-state.js";
 export {
   PENDING_TTL_MS,
@@ -40,3 +40,14 @@ export { LISTING_TTL_MS, PAGE_SIZE, listingPage, resolveRef, type ItemState, typ
 export { MANAGEMENT_TEXT, deletionNotice } from "./domain/management-replies.js";
 export type { InboundReceipts } from "./application/inbound-receipts.js";
 export { createPgInboundReceipts } from "./infrastructure/pg-inbound-receipts.js";
+export {
+  CITATIONS_TTL_MS,
+  createShowSource,
+  type ShowSource,
+  type ShowSourceContext,
+  type ShowSourceDeps,
+  type ShowSourceObserver,
+  type ShowSourceOutcome,
+} from "./application/show-source.js";
+export { parseShowSource } from "./domain/show-source.js";
+export { createOtelShowSourceObserver } from "./infrastructure/otel-show-source-observer.js";

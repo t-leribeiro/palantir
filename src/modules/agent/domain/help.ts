@@ -9,6 +9,8 @@ export const HELP_TEXT = [
   "• O que falaram sobre Kafka?",
   "• Em qual áudio do T3 falaram de Temporal?",
   "",
+  '• Depois de uma resposta: "mostra a 2" abre a citação 2 inteira',
+  "",
   "Seus grupos:",
   "• grupos: lista seus grupos e conversas (mais: próxima página)",
   "• acompanhar 4: passa a guardar as mensagens novas do grupo 4",

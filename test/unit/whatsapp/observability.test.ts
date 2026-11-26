@@ -114,4 +114,17 @@ describe("captura (feature 004, D-16)", () => {
     expect(metrics.get("whatsapp_reconnects_total")).toEqual([{ attributes: { role: "capture" }, value: 1 }]);
     expect(logs).toEqual(["sessão do WhatsApp: connected", "sessão de captura do WhatsApp: reconnecting"]);
   });
+
+  it("feature 008: conta os anexos de áudio por resultado, sem número nem conteúdo", async () => {
+    const { reader, observer, logs } = setup();
+    observer.mediaSent?.("sent");
+    observer.mediaSent?.("sent");
+    observer.mediaSent?.("failed");
+    const m = await collect(reader);
+    expect(m.get("channel_media_sent_total")).toEqual([
+      { attributes: { adapter: "whatsapp", outcome: "sent" }, value: 2 },
+      { attributes: { adapter: "whatsapp", outcome: "failed" }, value: 1 },
+    ]);
+    expect(logs.join("\n")).not.toMatch(/\d{8,}/);
+  });
 });

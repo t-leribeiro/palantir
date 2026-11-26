@@ -25,6 +25,7 @@ export function createOtelWhatsAppObserver(meter: Meter = metrics.getMeter("pala
   const captured = meter.createCounter("whatsapp_captured_total", { description: "Mensagens de grupos autorizados entregues à ingestão, por resultado" });
   const discarded = meter.createCounter("whatsapp_capture_discarded_total", { description: "Mensagens descartadas pela captura, por motivo" });
   const ignoredMedia = meter.createCounter("whatsapp_capture_ignored_media_total", { description: "Mídias de grupos autorizados contadas e descartadas (S4)" });
+  const mediaSent = meter.createCounter("channel_media_sent_total", { description: "Anexos de áudio de respostas, por resultado (feature 008)" });
   let current: SessionState = "pairing";
   meter
     .createObservableGauge("whatsapp_session_state", { description: "1 no estado atual da sessão, 0 nos demais" })
@@ -36,6 +37,10 @@ export function createOtelWhatsAppObserver(meter: Meter = metrics.getMeter("pala
     captured: (outcome) => captured.add(1, { outcome }),
     captureDiscarded: (reason) => discarded.add(1, { reason }),
     captureIgnoredMedia: (kind) => ignoredMedia.add(1, { kind }),
+    mediaSent: (outcome) => {
+      mediaSent.add(1, { adapter: "whatsapp", outcome });
+      if (outcome !== "sent") log?.warn(`anexo de áudio da resposta não entregue (${outcome})`);
+    },
     received: (kind) => received.add(1, { kind }),
     replied: (count) => {
       replies.add(1);
