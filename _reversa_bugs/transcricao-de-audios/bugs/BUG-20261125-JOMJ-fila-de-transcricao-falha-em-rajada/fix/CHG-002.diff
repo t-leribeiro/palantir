@@ -1,0 +1,6 @@
+--- a/src/modules/media/infrastructure/transcribers/openai-compatible.ts
++++ b/src/modules/media/infrastructure/transcribers/openai-compatible.ts
+@@ async function transcribe(input: TranscribeInput): Promise<TranscribeResult> {
+-    const timeout = Math.max(options.minTimeoutMs ?? MIN_TIMEOUT_MS, (input.durationHint ?? 0) * 3 * 1000);
++    // Inteiro: o AbortSignal.timeout recusa prazo quebrado (236,06 × 3000 = 708180,0000000001), BUG-20261125-JOMJ.
++    const timeout = Math.ceil(Math.max(options.minTimeoutMs ?? MIN_TIMEOUT_MS, (input.durationHint ?? 0) * 3 * 1000));

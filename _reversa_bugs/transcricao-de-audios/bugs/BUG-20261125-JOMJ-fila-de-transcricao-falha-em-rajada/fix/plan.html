@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plano de correção · #8 BUG-20261125-JOMJ</title>
+<style>
+body{margin:0;padding:24px 16px;background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif}
+main{max-width:960px;margin:0 auto} a{color:#58a6ff} h1{font-size:22px;margin:0 0 4px} h2{font-size:17px;margin:28px 0 8px}
+.meta{color:#8b949e} .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-right:6px;border:1px solid #30363d}
+.high{color:#f85149;border-color:#f85149} .p1{color:#d29922;border-color:#d29922} .ok{color:#3fb950}
+.box{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px 16px;margin:8px 0}
+.box p{margin:0 0 8px} .box p:last-child{margin:0}
+table{width:100%;border-collapse:collapse} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #30363d;vertical-align:top}
+th{color:#8b949e;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.05em} .scroll{overflow-x:auto}
+code{background:#21262d;padding:1px 5px;border-radius:4px} svg{width:100%;height:auto;min-width:520px}
+</style></head><body><main>
+<h1>Plano de correção · #8 BUG-20261125-JOMJ</h1>
+<p class="meta">Contexto <code>transcricao-de-audios</code> · 2026-11-25 · <span class="pill high">high</span><span class="pill p1">P1</span> · gerado por /reversa-debugger-fix antes de qualquer mudança</p>
+
+<h2>Defeito</h2>
+<div class="box"><p>34 áudios do T3 (32 curtos e os de 236 s e 361 s) ficaram <code>failed/unavailable</code> sem que o pedido chegasse ao motor. As tentativas falham em milissegundos, e por isso pareciam "rajadas".</p></div>
+
+<h2>Causa raiz <span class="ok">(confirmed)</span></h2>
+<div class="box">
+<p>O adaptador calcula o prazo como <code>max(120 s, duração × 3 × 1000 ms)</code>. A duração vem do banco com decimais, e o produto em ponto flutuante sai não inteiro: <code>236,06 × 3000 = 708180,0000000001</code>. O <code>AbortSignal.timeout</code> só aceita inteiro e lança <code>RangeError</code>. Como o sinal é criado dentro de <code>call()</code>, esse erro vira <code>unavailable</code>, o pg-boss tenta de novo, falha igual, e o anexo vira <code>failed</code>.</p>
+<p>Evidências: o adaptador real com o áudio de 236 s falha em 6 ms sem chamar o transporte; dos 160 áudios com duração, os 126 <code>done</code> têm prazo inteiro e os 34 <code>failed</code> têm prazo não inteiro.</p>
+<p>A hipótese anterior (o corte de 300 s do #7 derrubaria as chamadas seguintes) foi rejeitada: com o #7 corrigido, a falha se repete com o motor ocioso.</p>
+</div>
+
+<h2>Estratégia: correção direta</h2>
+<div class="box">
+<p>Arredondar o prazo para cima com <code>Math.ceil</code>. É a menor correção coerente e não muda a regra da spec (3× a duração, mínimo de 120 s): no máximo, 1 ms a mais de prazo.</p>
+<p>Fica de fora: <code>call()</code> continuar classificando qualquer erro que não seja cancelamento como <code>unavailable</code>. Foi isso que escondeu o defeito por um dia. Mudar essa classificação muda o destino do anexo (ficaria <code>pending</code> com o job falhando no pg-boss) e merece decisão própria; fica registrado como observação.</p>
+<p>Não ofereço o debate multiagente (<code>/reversa-debugger-debate</code>): a causa está confirmada e a correção é de uma linha.</p>
+</div>
+
+<h2>Correction Change Set proposto</h2>
+<div class="scroll"><table>
+<tr><th>CHG</th><th>tipo</th><th>artefato</th><th>propósito</th></tr>
+<tr><td>CHG-001</td><td>test</td><td><code>test/unit/media/transcribers.test.ts</code></td><td>Reprodução: durações decimais chegam ao motor</td></tr>
+<tr><td>CHG-002</td><td>code</td><td><code>src/modules/media/infrastructure/transcribers/openai-compatible.ts</code></td><td><code>Math.ceil</code> no prazo</td></tr>
+<tr><td>CHG-003</td><td>data-repair</td><td>tabela <code>attachments</code></td><td>Devolver à fila os 34 <code>failed/unavailable</code>, com backup em <code>fix/data-repair-backup.tsv</code> e volta atrás. Exige reiniciar o worker</td></tr>
+</table></div>
+
+<h2>Testes planejados</h2>
+<div class="scroll"><table>
+<tr><th>tipo</th><th>teste</th><th>o que prova</th></tr>
+<tr><td>reprodução</td><td>"BUG-20261125-JOMJ: duração decimal não quebra o prazo; a chamada chega ao motor" (236,06 s, 361,1 s e 40,05 s, cujos prazos dão 708180,0000000001, 1083300,0000000002 e 120149,99999999999)</td><td>Hoje cada uma falha com <code>unavailable</code> sem pedido; com a correção, todas chegam ao servidor</td></tr>
+<tr><td>regressão</td><td>"prazo estourado vira timeout; motor fora do ar vira unavailable" e os testes do #7</td><td>O prazo continua valendo e a classificação não muda</td></tr>
+</table></div>
+
+<h2>Riscos</h2>
+<div class="box"><p><b>change_risk: baixa.</b> É um arredondamento num adaptador, sem contrato, schema nem dependência; é reversível com revert e coberto por teste unitário.</p></div>
+
+<h2>Mini-grafo</h2>
+<div class="box scroll">
+<svg viewBox="0 0 700 140" role="img" aria-label="Relações do bug 8">
+<defs><marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6e7681"/></marker></defs>
+<line x1="400" y1="70" x2="312" y2="70" stroke="#6e7681" stroke-width="2" stroke-dasharray="2 6" marker-end="url(#s)"/>
+<text x="356" y="58" fill="#6e7681" font-size="11" text-anchor="middle">caused-by (rejected)</text>
+<a href="../../BUG-20261125-B4B3-transcricao-longa-cortada-aos-300s/bug.md"><rect x="20" y="22" width="290" height="96" rx="10" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+<text x="32" y="48" fill="#e6edf3" font-size="14" font-weight="600">#7 · B4B3</text>
+<text x="32" y="70" fill="#c9d1d9" font-size="12">Transcrição longa cortada aos 300 s</text>
+<text x="32" y="92" fill="#d29922" font-size="11">active · delivering</text></a>
+<a href="../bug.md"><rect x="400" y="22" width="280" height="96" rx="10" fill="#161b22" stroke="#f85149" stroke-width="3"/>
+<text x="412" y="48" fill="#e6edf3" font-size="14" font-weight="600">#8 · JOMJ (este)</text>
+<text x="412" y="70" fill="#c9d1d9" font-size="12">Prazo não inteiro quebra a chamada</text>
+<text x="412" y="92" fill="#d29922" font-size="11">active · planning</text></a>
+</svg>
+</div>
+
+<h2>Relações</h2>
+<div class="scroll"><table>
+<tr><th>origem</th><th>tipo</th><th>destino</th><th>estado</th></tr>
+<tr><td><a href="../bug.md">BUG-20261125-JOMJ</a></td><td>caused-by</td><td><a href="../../BUG-20261125-B4B3-transcricao-longa-cortada-aos-300s/bug.md">BUG-20261125-B4B3</a></td><td>rejected (mantida no histórico)</td></tr>
+</table></div>
+
+<h2>Ordem sugerida</h2>
+<div class="box"><p>1. Corrigir o #8 (este) na mesma branch do #7. 2. Devolver os 34 áudios à fila e reiniciar o worker. 3. Fechar os dois quando os 36 terminarem <code>done</code>.</p></div>
+</main></body></html>

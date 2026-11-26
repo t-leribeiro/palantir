@@ -2,6 +2,7 @@
 // Hoje fala com o Speaches local; um SaaS com a mesma API é só configuração (URL, modelo, chave e a
 // liberação explícita de motor remoto, já conferida na configuração). Nada do áudio nem do texto vai para log.
 import { TranscriberError, type TranscribeInput, type TranscribeResult, type Transcriber } from "../../application/ports.js";
+import { requestWithoutHeadersTimeout } from "./http-transport.js";
 
 export interface OpenAiCompatibleOptions {
   readonly url: string;
@@ -9,6 +10,7 @@ export interface OpenAiCompatibleOptions {
   readonly apiKey?: string | undefined;
   /** Prazo mínimo da chamada; o efetivo é o maior entre este e 3× a duração prevista. */
   readonly minTimeoutMs?: number;
+  /** Só para testes. O padrão não é o `fetch` global, que corta a resposta aos 300 s (BUG-20261125-B4B3). */
   readonly fetch?: typeof fetch;
 }
 
@@ -26,11 +28,12 @@ const LANGUAGE_NAMES: Readonly<Record<string, string>> = { portuguese: "pt", eng
 
 export function createOpenAiCompatibleTranscriber(options: OpenAiCompatibleOptions): Transcriber {
   const base = options.url.replace(/\/+$/, "");
-  const doFetch = options.fetch ?? fetch;
+  const doFetch = options.fetch ?? requestWithoutHeadersTimeout;
   const headers: Record<string, string> = options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {};
 
   async function transcribe(input: TranscribeInput): Promise<TranscribeResult> {
-    const timeout = Math.max(options.minTimeoutMs ?? MIN_TIMEOUT_MS, (input.durationHint ?? 0) * 3 * 1000);
+    // Inteiro: o AbortSignal.timeout recusa prazo quebrado (236,06 × 3000 = 708180,0000000001), BUG-20261125-JOMJ.
+    const timeout = Math.ceil(Math.max(options.minTimeoutMs ?? MIN_TIMEOUT_MS, (input.durationHint ?? 0) * 3 * 1000));
     const response = await call(() =>
       doFetch(`${base}/v1/audio/transcriptions`, {
         method: "POST",
@@ -74,7 +77,8 @@ async function call(request: () => Promise<Response>): Promise<Response> {
   try {
     return await request();
   } catch (error) {
-    if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    // O `fetch` lança DOMException; o `node:http` lança um AbortError próprio, com o motivo do sinal em `cause`.
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
       throw new TranscriberError("timeout", "o motor de transcrição não respondeu no prazo");
     }
     throw new TranscriberError("unavailable", "o motor de transcrição não está acessível");

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plano de correção · #7 BUG-20261125-B4B3</title>
+<style>
+body{margin:0;padding:24px 16px;background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif}
+main{max-width:960px;margin:0 auto} a{color:#58a6ff} h1{font-size:22px;margin:0 0 4px} h2{font-size:17px;margin:28px 0 8px}
+.meta{color:#8b949e} .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-right:6px;border:1px solid #30363d}
+.high{color:#f85149;border-color:#f85149} .p1{color:#d29922;border-color:#d29922} .state{color:#d29922}
+.box{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px 16px;margin:8px 0}
+.box p{margin:0 0 8px} .box p:last-child{margin:0}
+table{width:100%;border-collapse:collapse} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #30363d;vertical-align:top}
+th{color:#8b949e;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.05em} .scroll{overflow-x:auto}
+code{background:#21262d;padding:1px 5px;border-radius:4px} svg{width:100%;height:auto;min-width:520px}
+</style></head><body><main>
+<h1>Plano de correção · #7 BUG-20261125-B4B3</h1>
+<p class="meta">Contexto <code>transcricao-de-audios</code> · 2026-11-25 · <span class="pill high">high</span><span class="pill p1">P1</span> · gerado por /reversa-debugger-fix antes de qualquer mudança</p>
+
+<h2>Defeito</h2>
+<div class="box"><p>Áudio cuja transcrição leva mais de 5 min nunca termina. A chamada ao motor cai aos 300 s, as 3 novas tentativas repetem o corte e o anexo fica <code>failed</code> com <code>unavailable</code>. Hoje são 4 áudios do T3, de 236 s a 461 s.</p></div>
+
+<h2>Causa raiz <span class="state">(supported; vira confirmed com a reprodução no adaptador real)</span></h2>
+<div class="box">
+<p>O adaptador <code>openai-compatible</code> chama o motor com o <code>fetch</code> global do Node 22. Esse <code>fetch</code> (undici 6.29.1) tem um prazo fixo de 300 s para receber os cabeçalhos da resposta. O Speaches só responde quando a transcrição termina, então toda transcrição acima de 5 min cai, mesmo com o prazo do adaptador em 3× a duração (1.308 s para um áudio de 7:15).</p>
+<p>O erro do undici (<code>TypeError</code> com causa <code>UND_ERR_HEADERS_TIMEOUT</code>) cai no ramo genérico de <code>call()</code> e sai como <code>unavailable</code>, escondendo que foi prazo.</p>
+<p>Evidências: o experimento com um servidor que responde em 320 s; no motor, os áudios de 7:15 e 7:40 recomeçam a cada ~6 min; a tentativa das 10:41:00 terminou às 10:46:05.</p>
+</div>
+
+<h2>Estratégia: correção direta</h2>
+<div class="box">
+<p>O adaptador passa a falar com o motor por um transporte próprio sobre <code>node:http</code> e <code>node:https</code>, que não têm prazo de cabeçalhos. O único prazo passa a ser o do adaptador (o maior entre 120 s e 3× a duração), pelo <code>AbortSignal</code> que já existe. O corpo multipart continua montado com <code>FormData</code> e serializado pelo próprio Node, e a resposta volta como <code>Response</code>, então o resto do adaptador não muda. O <code>fetch</code> injetável dos testes continua.</p>
+<p>Por que não um <code>Agent</code> do undici com <code>headersTimeout: 0</code>: o undici do projeto (7.30.2) vem só como dependência indireta do testcontainers, e misturar a versão 7 com o <code>fetch</code> do Node (versão 6) tem incompatibilidades conhecidas. Adicionar o undici como dependência direta resolveria, mas seria uma dependência nova para algo que o <code>node:http</code> já faz.</p>
+<p>Não ofereço o debate multiagente (<code>/reversa-debugger-debate</code>): há uma causa só e uma estratégia clara.</p>
+</div>
+
+<h2>Correction Change Set proposto</h2>
+<div class="scroll"><table>
+<tr><th>CHG</th><th>tipo</th><th>artefato</th><th>propósito</th></tr>
+<tr><td>CHG-001</td><td>test</td><td><code>test/unit/media/transcribers.test.ts</code></td><td>Testes de reprodução e regressão (abaixo)</td></tr>
+<tr><td>CHG-002</td><td>code</td><td><code>src/modules/media/infrastructure/transcribers/http-transport.ts</code> (novo)</td><td>Transporte sobre <code>node:http</code> e <code>node:https</code>, sem prazo de cabeçalhos, com a assinatura do <code>fetch</code></td></tr>
+<tr><td>CHG-003</td><td>code</td><td><code>src/modules/media/infrastructure/transcribers/openai-compatible.ts</code></td><td>Usa o transporte novo por padrão; <code>call()</code> reconhece o cancelamento pelo nome do erro (o <code>node:http</code> lança <code>AbortError</code> que não é <code>DOMException</code>)</td></tr>
+<tr><td>CHG-004</td><td>data-repair</td><td>tabela <code>attachments</code></td><td>Devolver à fila os 4 áudios <code>failed/unavailable</code> com 210 s ou mais: dry-run com a lista, cópia dos ids e estados em <code>fix/data-repair-backup.tsv</code> e o caminho de volta (voltar a <code>failed/unavailable</code>). Exige o worker reiniciado com o código novo</td></tr>
+</table></div>
+
+<h2>Testes planejados</h2>
+<div class="scroll"><table>
+<tr><th>tipo</th><th>teste</th><th>o que prova</th></tr>
+<tr><td>reprodução (rápida)</td><td>"o adaptador não depende do fetch global do Node, que corta a resposta aos 300 s"</td><td>Com o <code>fetch</code> global trocado por um que falha, o adaptador sem <code>fetch</code> injetado ainda transcreve num servidor local. Falha hoje e passa com a correção</td></tr>
+<tr><td>reprodução (cápsula, 5 min)</td><td><code>evidence/reproduction.md</code></td><td>Servidor que responde em 320 s e adaptador real com prazo de 1.200 s: hoje falha aos ~300 s com <code>unavailable</code>; depois da correção, termina com sucesso. É lento demais para a esteira e fica como evidência</td></tr>
+<tr><td>regressão</td><td>"pelo transporte padrão, o prazo do adaptador vira timeout, o motor fora do ar vira unavailable e a chave vai no cabeçalho"</td><td>A classificação dos erros e a autenticação não mudam com o transporte novo</td></tr>
+<tr><td>regressão</td><td>Os testes existentes de <code>transcribers.test.ts</code> (servidor HTTP real)</td><td>Formato multipart, resposta <code>verbose_json</code>, erros HTTP e saúde continuam iguais</td></tr>
+</table></div>
+
+<h2>Riscos</h2>
+<div class="box">
+<p><b>change_risk: baixa.</b> Motivos: só o adaptador do motor de transcrição muda; não há mudança de contrato, de schema nem de dados além da devolução à fila; é reversível com um revert; o transporte novo passa pelos testes existentes do adaptador, que já usam um servidor HTTP real.</p>
+<p>Fica de fora o BUG-20261125-JOMJ (#8, a fila que falha em rajada). Depois desta correção, devolvo os 32 áudios curtos à fila para ver se o #8 some sem o gatilho, e só então decido a correção dele.</p>
+<p>Restrições do registro: o transporte fica dentro de <code>transcribers/</code> (regra <code>transcriber-engine-isolated</code>), e nada do áudio nem do texto vai para log.</p>
+</div>
+
+<h2>Mini-grafo</h2>
+<div class="box scroll">
+<svg viewBox="0 0 700 140" role="img" aria-label="Relações do bug 7">
+<defs><marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8b949e"/></marker></defs>
+<line x1="400" y1="70" x2="312" y2="70" stroke="#8b949e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#s)"/>
+<text x="356" y="58" fill="#8b949e" font-size="11" text-anchor="middle">caused-by</text>
+<a href="../bug.md"><rect x="20" y="22" width="290" height="96" rx="10" fill="#161b22" stroke="#f85149" stroke-width="3"/>
+<text x="32" y="48" fill="#e6edf3" font-size="14" font-weight="600">#7 · B4B3 (este)</text>
+<text x="32" y="70" fill="#c9d1d9" font-size="12">Transcrição longa cortada aos 300 s</text>
+<text x="32" y="92" fill="#f85149" font-size="11">open · planning</text></a>
+<a href="../../BUG-20261125-JOMJ-fila-de-transcricao-falha-em-rajada/bug.md"><rect x="400" y="22" width="280" height="96" rx="10" fill="#161b22" stroke="#f85149" stroke-width="2"/>
+<text x="412" y="48" fill="#e6edf3" font-size="14" font-weight="600">#8 · JOMJ</text>
+<text x="412" y="70" fill="#c9d1d9" font-size="12">Fila de transcrição falha em rajada</text>
+<text x="412" y="92" fill="#f85149" font-size="11">open · triaging</text></a>
+</svg>
+<p class="meta">Seta tracejada: relação proposed, ainda hipótese.</p>
+</div>
+
+<h2>Relações</h2>
+<div class="scroll"><table>
+<tr><th>origem</th><th>tipo</th><th>destino</th><th>estado</th></tr>
+<tr><td><a href="../../BUG-20261125-JOMJ-fila-de-transcricao-falha-em-rajada/bug.md">BUG-20261125-JOMJ</a></td><td>caused-by</td><td><a href="../bug.md">BUG-20261125-B4B3</a></td><td>proposed</td></tr>
+</table></div>
+
+<h2>Ordem sugerida</h2>
+<div class="box"><p>1. Corrigir o #7 (este), a causa estrutural. 2. Devolver os 36 áudios à fila e observar. 3. Corrigir o #8 só se as falhas em rajada continuarem.</p></div>
+</main></body></html>

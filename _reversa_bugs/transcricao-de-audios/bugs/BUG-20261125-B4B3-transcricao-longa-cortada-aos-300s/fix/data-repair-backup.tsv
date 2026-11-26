@@ -1,0 +1,5 @@
+id	processing_status	processing_error	duration_s	updated_at
+b189d61b-05c5-400c-836e-2cf3872b52da	failed	unavailable	236.060	2026-11-25 13:40:59.636292+00
+585a630c-9923-43a2-af64-3f34512dc8ea	failed	unavailable	361.380	2026-11-25 13:46:11.490262+00
+0a05cfd1-7a02-4687-86d3-dbe8526cf836	failed	unavailable	435.680	2026-11-25 13:46:05.063841+00
+731c28e2-5d32-44ae-b939-d8f6fe6ffb3f	failed	unavailable	460.720	2026-11-25 14:03:10.120222+00
