@@ -38,6 +38,23 @@ export interface SavedMessage {
   readonly text: string | null;
 }
 
+/**
+ * Uma mensagem já guardada, achada pelo id externo original (o que o canal deu antes de o tema entrar no id).
+ * Serve para citar com "guarda em X" depois que a memória de 10 min passou (demonstração de 2026-11-26).
+ */
+export interface SavedOrigin {
+  readonly kind: "text" | "link" | "audio" | "image" | "document";
+  readonly text: string | null;
+  readonly sentAt: Date;
+  readonly attachment: {
+    readonly mimeType: string;
+    readonly sizeBytes: number | null;
+    readonly sha256: string;
+    readonly storageKey: string;
+    readonly durationSeconds: number | null;
+  } | null;
+}
+
 export interface ForgetResult {
   readonly itemId: string;
   readonly theme: string;
@@ -55,6 +72,7 @@ export interface SavedItemStore {
   /** O nome gravado do tema (o da primeira vez), ou `null` se ele não existe. */
   themeName(spaceId: string, normalized: string): Promise<string | null>;
   savedMessage(spaceId: string, messageId: string): Promise<SavedMessage | null>;
+  savedOrigin(spaceId: string, originExternalId: string): Promise<SavedOrigin | null>;
   /** Apaga a mensagem só se for um guardado do espaço; a cascata e os gatilhos levam o item e o tema vazio. */
   forget(spaceId: string, messageId: string): Promise<ForgetResult | null>;
 }
@@ -72,6 +90,7 @@ export interface SavedItems {
   /** Como mostrar o tema (RN-03): o nome da primeira vez, ou o que o dono escreveu se ele ainda não existe. */
   displayName(spaceId: string, themeName: string): Promise<string>;
   savedMessage(spaceId: string, messageId: string): Promise<SavedMessage | null>;
+  savedOrigin(spaceId: string, originExternalId: string): Promise<SavedOrigin | null>;
   forget(spaceId: string, messageId: string): Promise<ForgetResult | null>;
 }
 
@@ -115,6 +134,7 @@ export function createSavedItems(store: SavedItemStore): SavedItems {
       return (await store.themeName(spaceId, theme.normalized)) ?? theme.name;
     },
     savedMessage: (spaceId, messageId) => store.savedMessage(spaceId, messageId),
+    savedOrigin: (spaceId, originExternalId) => store.savedOrigin(spaceId, originExternalId),
     forget: (spaceId, messageId) => store.forget(spaceId, messageId),
   };
 }

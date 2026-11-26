@@ -41,6 +41,11 @@ export async function beforeCommands(routing: SavedRouting, ctx: SaveContext, me
   return null;
 }
 
+/** Texto comum, antes da busca: pode entrar numa leva de textos encaminhados (`undefined` segue como pergunta). */
+export function screenText(routing: SavedRouting, ctx: SaveContext, message: CanonicalMessage): Promise<AgentReply | null | undefined> {
+  return routing.save.screen(ctx, message);
+}
+
 /** Listagem, "esquece a N" e a confirmação dele, depois dos comandos da S5. */
 export function afterCommands(routing: SavedRouting, ctx: SaveContext, text: string): Promise<AgentReply | null> {
   return routing.listing(ctx, text);

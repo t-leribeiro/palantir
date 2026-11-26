@@ -1,6 +1,6 @@
 // Itens guardados no PostgreSQL (feature 009, data-delta.md §4 e §5).
 import { withTransaction, type Pool, type Queryable } from "../../../platform/db/index.js";
-import type { ForgetResult, SavedContent, SavedEntry, SavedItemStore, SavedMessage, ThemeCount, ThemeListing } from "../application/saved-items.js";
+import type { ForgetResult, SavedContent, SavedEntry, SavedItemStore, SavedMessage, SavedOrigin, ThemeCount, ThemeListing } from "../application/saved-items.js";
 import type { Theme } from "../domain/theme.js";
 
 const SAVED_OF_MESSAGE = `
@@ -38,6 +38,37 @@ async function savedMessage(db: Queryable, spaceId: string, messageId: string): 
   const { rows } = await db.query<{ item_id: string; theme: string; text: string | null }>(SAVED_OF_MESSAGE, [spaceId, messageId]);
   const row = rows[0];
   return row ? { itemId: row.item_id, theme: row.theme, text: row.text } : null;
+}
+
+/** O id externo guardado é `<original>#<tema>`: a primeira cópia guardada desse original, só da fonte Guardados. */
+const SAVED_ORIGIN = `
+  SELECT m.kind, m.text, m.sent_at, a.mime_type, a.size_bytes::float8 AS size_bytes, a.sha256, a.storage_key, a.duration_s::float8 AS duration_s
+    FROM messages m
+    JOIN sources s ON s.id = m.source_id AND s.kind = 'saved'
+    LEFT JOIN attachments a ON a.message_id = m.id AND a.storage_status = 'stored'
+   WHERE m.space_id = $1 AND left(m.external_message_id, length($2) + 1) = $2 || '#'
+   ORDER BY m.created_at, m.id
+   LIMIT 1`;
+
+interface OriginRow {
+  kind: SavedOrigin["kind"];
+  text: string | null;
+  sent_at: Date;
+  mime_type: string | null;
+  size_bytes: number | null;
+  sha256: string | null;
+  storage_key: string | null;
+  duration_s: number | null;
+}
+
+async function savedOrigin(db: Queryable, spaceId: string, originExternalId: string): Promise<SavedOrigin | null> {
+  const row = (await db.query<OriginRow>(SAVED_ORIGIN, [spaceId, originExternalId])).rows[0];
+  if (!row) return null;
+  const attachment =
+    row.storage_key && row.sha256 && row.mime_type
+      ? { mimeType: row.mime_type, sizeBytes: row.size_bytes, sha256: row.sha256, storageKey: row.storage_key, durationSeconds: row.duration_s }
+      : null;
+  return { kind: row.kind, text: row.text, sentAt: row.sent_at, attachment };
 }
 
 async function attach(db: Queryable, spaceId: string, theme: Theme, messageId: string): Promise<{ itemId: string; theme: string }> {
@@ -144,6 +175,7 @@ export function createPgSavedItems(pool: Pool, options: { readonly onOrphanKeys?
       return rows[0]?.name ?? null;
     },
     savedMessage: (spaceId, messageId) => savedMessage(pool, spaceId, messageId),
+    savedOrigin: (spaceId, originExternalId) => savedOrigin(pool, spaceId, originExternalId),
     forget: (spaceId, messageId) => withTransaction(pool, (db) => forget(db, spaceId, messageId, options.onOrphanKeys)),
   };
 }

@@ -33,6 +33,7 @@ export {
   type SavedItemStore,
   type SavedItems,
   type SavedMessage,
+  type SavedOrigin,
   type ThemeCount,
   type ThemeListing,
 } from "./application/saved-items.js";

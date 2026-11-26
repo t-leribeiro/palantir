@@ -40,6 +40,7 @@ function fakeStore(contents: readonly SavedContent[]): SavedItemStore & { normal
     listThemes: async () => [],
     themeName: async (_space, normalized) => (normalized === "leituras" ? "Leituras" : null),
     savedMessage: async () => null,
+    savedOrigin: async () => null,
     forget: async () => null,
   };
 }

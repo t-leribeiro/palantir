@@ -281,6 +281,11 @@ Cenário: nada do conteúdo nos logs
 - **Q:** Onde o conteúdo guardado aparece?
   **R:** Nas respostas às perguntas normais, citado como "Guardados · <tema>", e na listagem. "O que guardei sobre <tema>?" lista o tema inteiro, sem buscar dentro do conteúdo. Aplicado em RN-08 e RN-09.
 
+### Sessão 2026-11-26 (demonstração com o chip)
+
+- **Q:** Na demonstração, a foto encaminhada foi guardada, mas links e anotações encaminhados viraram perguntas. O WhatsApp não marca como encaminhada a mensagem que o próprio dono escreveu. Como o agente reconhece esse conteúdo?
+  **R:** Leva e citação. Textos comuns que chegam juntos (até 2 s pela hora da mensagem) formam uma leva, que espera o pedido com um aviso só. Responder citando qualquer mensagem dos últimos 10 minutos com "guarda em X" guarda essa mensagem, mesmo que ela tenha virado pergunta ou já tenha sido guardada em outro tema. Depois dos 10 minutos, a citada é procurada entre os guardados e copiada para o tema novo (T026). Tudo só na memória (adendo do ADR-0014). Ações T024 e T025.
+
 ## 10. Lacunas
 
 Nenhuma lacuna aberta. As três dúvidas da versão inicial foram resolvidas na sessão de 2026-11-26.
@@ -290,4 +295,5 @@ Nenhuma lacuna aberta. As três dúvidas da versão inicial foram resolvidas na 
 | Data | Alteração | Autor |
 |------|-----------|-------|
 | 2026-11-25 | Versão inicial gerada por `/reversa-requirements` | reversa |
+| 2026-11-26 | Demonstração: leva de textos do dono e citação de texto recente (T024, T025) | reversa |
 | 2026-11-26 | `/reversa-clarify`: 4 respostas (ligação do pedido, encaminhado sem pedido, tipos, onde aparece); RN-01, RN-02, RN-08, RN-09 reescritas, RN-11 nova, RF-13 a RF-15 novos | reversa |

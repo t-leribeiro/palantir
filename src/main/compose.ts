@@ -340,7 +340,7 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   const wiring = await wireCapture(config, pool, queue, metrics, logger);
   const channel = buildAgentChannel(options, mode, wiring, receipts, log, buildOutboundMedia(config, pool, "whatsapp", logger));
   // Feature 009: o guardar baixa o áudio mandado ao agente pelo número do agente.
-  const saved = await buildSaved(config, pool, queue, buildIngest(pool, queue), channel, logger, savedObservers());
+  const saved = await buildSaved(config, pool, queue, buildIngest(pool, queue), channel, logger, savedObservers(), config.whatsapp.burstMs);
   const ask = buildAsk(config, pool, queue, "silent", options.search, saved.routing);
   const captureChannel = mode === "dedicated" ? buildCaptureChannel(options, wiring, receipts, log) : undefined;
   channel.onAgentMessage(answerWith(ask, metrics, logger));

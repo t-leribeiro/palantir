@@ -136,6 +136,22 @@ describe("itens guardados", () => {
     expect(group.status === "found" ? group.message.savedTheme : "não achou").toBeUndefined();
   });
 
+  it("acha a mensagem guardada pelo id original, para citar depois dos 10 minutos (demonstração de 2026-11-26)", async () => {
+    const sentAt = new Date("2026-11-26T10:15:00.000Z");
+    await insertMessageWithChunk(db.pool, { spaceId, sourceId: savedSourceId, text: "8 Startup Ideas https://medium.com/x", author: "Você", sentAt, externalId: "WA-LINK#ideias" });
+    expect(await saved.savedOrigin(spaceId, "WA-LINK")).toEqual({ kind: "text", text: "8 Startup Ideas https://medium.com/x", sentAt, attachment: null });
+    const audio = await insertMessageWithChunk(db.pool, { spaceId, sourceId: savedSourceId, text: "transcrição", author: "Você", kind: "audio", sentAt, externalId: "WA-AUDIO#reunioes" });
+    await audioAttachment(audio.messageId, "c".repeat(64));
+    expect(await saved.savedOrigin(spaceId, "WA-AUDIO")).toMatchObject({
+      kind: "audio",
+      attachment: { mimeType: "audio/ogg", sizeBytes: 10, sha256: "c".repeat(64), storageKey: `${spaceId}/${savedSourceId}/${"c".repeat(64)}`, durationSeconds: 102 },
+    });
+    expect(await saved.savedOrigin(spaceId, "WA-LIN")).toBeNull();
+    expect(await saved.savedOrigin(strangerSpaceId, "WA-LINK")).toBeNull();
+    await insertMessageWithChunk(db.pool, { spaceId, sourceId: groupSourceId, text: "de grupo", sentAt, externalId: "WA-GROUP#x" });
+    expect(await saved.savedOrigin(spaceId, "WA-GROUP")).toBeNull();
+  });
+
   it("outro espaço nunca aparece, nem deixa guardar mensagem alheia", async () => {
     expect((await saved.listThemes(strangerSpaceId)).map((t) => t.theme)).toEqual(["Dele"]);
     const mine = await message("minha");

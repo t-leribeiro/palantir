@@ -36,11 +36,18 @@ const logger = createLogger({ level: "debug", destination: { write: (line: strin
 
 const nextId = () => `DM-${(seq += 1)}`;
 
+/**
+ * A hora de cada mensagem no aplicativo avança 5 s por envio, para as perguntas seguidas não formarem uma leva
+ * (a leva junta textos a até 2 s um do outro). Quem quer simular uma leva passa a mesma `sentAt`.
+ */
+let appClock = Date.now();
+const nextSentAt = () => new Date((appClock += 5_000));
+
 /** Manda ao agente e devolve o que ele respondeu (vazio quando ficou calado). */
-async function send(message: { id?: string; text?: string; isForwarded?: boolean; quotedId?: string; kind?: "text" | "image" }): Promise<string> {
+async function send(message: { id?: string; text?: string; isForwarded?: boolean; quotedId?: string; kind?: "text" | "image"; sentAt?: Date }): Promise<string> {
   provider.clearSent();
-  const { kind = "text", id = nextId(), ...rest } = message;
-  await provider.deliver({ id, chatJid: MY_CHAT, senderPhone: ME, kind, sentAt: new Date(), ...rest });
+  const { kind = "text", id = nextId(), sentAt = nextSentAt(), ...rest } = message;
+  await provider.deliver({ id, chatJid: MY_CHAT, senderPhone: ME, kind, sentAt, ...rest });
   return provider.sent().map((s) => s.text).join("\n");
 }
 
@@ -104,12 +111,31 @@ describe("S8: guardar com tema e recuperar pelo tema (WhatsApp)", () => {
     expect(await ask("guarda em Arquitetura")).toBe("Guardei 2 itens em Arquitetura.");
   });
 
+  it("demonstração: textos do dono que chegam juntos, sem a marca de encaminhado, formam uma leva", async () => {
+    const at = nextSentAt();
+    provider.clearSent();
+    await Promise.all(
+      ["app comparador de preço de corridas", "chá de bebê", "unificar dívidas"].map((text, i) =>
+        provider.deliver({ id: `OWN-${i}`, chatJid: MY_CHAT, senderPhone: ME, kind: "text", text, sentAt: new Date(at.getTime() + i * 400) }),
+      ),
+    );
+    expect(provider.sent().map((m) => m.text)).toEqual(['Recebi. Para guardar, mande "guarda em <tema>".']);
+    expect(await ask("guarda em ideias")).toBe("Guardei 3 itens em ideias.");
+  });
+
+  it("demonstração: responder citando um texto que virou pergunta guarda esse texto", async () => {
+    expect(await send({ id: "OWN-Q", text: "reclame aqui de imobiliária" })).toContain("Não encontrei");
+    expect(await send({ text: "guarda em ideias", quotedId: "OWN-Q" })).toBe("Guardei em ideias.");
+  });
+
   it("RF-13: respondendo citando, guarda só a citada; sem citar, o resto", async () => {
     await forward("decidimos usar filas no pg-boss", "FW-A");
     await forward("rascunho sem importância", "FW-B");
     expect(await send({ text: "guarda em decisões", quotedId: "FW-A" })).toBe("Guardei em decisões.");
     expect(await ask("guarda em rascunho")).toBe("Guardei em rascunho.");
-    expect(await send({ text: "guarda em decisões", quotedId: "FW-A" })).toContain("Não achei essa mensagem encaminhada");
+    // Demonstração de 2026-11-26: a já guardada continua citável por 10 min; no mesmo tema, é repetida.
+    expect(await send({ text: "guarda em decisões", quotedId: "FW-A" })).toBe("Isso já estava guardado em decisões.");
+    expect(await send({ text: "guarda em decisões", quotedId: "NUNCA-VEIO" })).toContain("Não achei essa mensagem encaminhada");
   });
 
   it("numa mensagem só e nada para guardar", async () => {
@@ -118,7 +144,7 @@ describe("S8: guardar com tema e recuperar pelo tema (WhatsApp)", () => {
   });
 
   it("RF-14: o áudio encaminhado é guardado e achado pelo que foi falado", async () => {
-    const { text: _t, ...base } = { id: "AU-1", chatJid: MY_CHAT, senderPhone: ME, sentAt: new Date(), isForwarded: true, text: "" };
+    const { text: _t, ...base } = { id: "AU-1", chatJid: MY_CHAT, senderPhone: ME, sentAt: nextSentAt(), isForwarded: true, text: "" };
     provider.clearSent();
     await provider.deliverAudio(base, { bytes: AUDIO, seconds: 40 });
     expect(await ask("guarda em reuniões")).toBe("Guardei em reuniões.");
@@ -128,7 +154,7 @@ describe("S8: guardar com tema e recuperar pelo tema (WhatsApp)", () => {
   it("RF-15: foto sem legenda não é guardada; com legenda, guarda a legenda", async () => {
     await send({ kind: "image", isForwarded: true });
     expect(await ask("guarda em viagens")).toBe("Dessa mensagem eu só guardaria a legenda, e ela não tem.");
-    await provider.deliver({ id: nextId(), chatJid: MY_CHAT, senderPhone: ME, kind: "image", caption: "quadro da arquitetura de filas", isForwarded: true, sentAt: new Date() });
+    await provider.deliver({ id: nextId(), chatJid: MY_CHAT, senderPhone: ME, kind: "image", caption: "quadro da arquitetura de filas", isForwarded: true, sentAt: nextSentAt() });
     expect(await ask("guarda em viagens")).toBe("Guardei em viagens.");
   });
 
@@ -195,6 +221,16 @@ describe("S8 pelo canal de teste", () => {
     expect(await fakeAgent({ text: "observabilidade com Tempo e Loki", isForwarded: true, messageId: "fake-fw-1" })).toBe('Recebi. Para guardar, mande "guarda em <tema>".');
     expect(await fakeAgent({ text: "guarda em observabilidade", quotedMessageId: "fake-fw-1" })).toBe("Guardei em observabilidade.");
     expect(await fakeAgent({ text: "guardados observabilidade" })).toContain("Guardados em observabilidade (1):");
+  });
+
+  it("demonstração: citar uma mensagem que já saiu da memória acha ela nos guardados e copia para o tema novo", async () => {
+    // Guardada pelo WhatsApp; o canal de teste tem outra memória, como se os 10 minutos tivessem passado.
+    await forward("8 Startup Ideas That Keep Trending https://medium.com/ideias", "FW-OLD");
+    expect(await ask("guarda em startups")).toBe("Guardei em startups.");
+    expect(await fakeAgent({ text: "guarda em decisões antigas", quotedMessageId: "FW-OLD" })).toBe("Guardei em decisões antigas.");
+    expect(await fakeAgent({ text: "guardados decisões antigas" })).toContain("8 Startup Ideas That Keep Trending");
+    expect(await fakeAgent({ text: "guardados startups" })).toContain("Guardados em startups (1):");
+    expect(await fakeAgent({ text: "guarda em x", quotedMessageId: "NUNCA-GUARDADA" })).toContain("Não achei essa mensagem encaminhada");
   });
 });
 

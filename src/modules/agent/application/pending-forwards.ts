@@ -29,4 +29,25 @@ export interface PendingForwards<C> {
   awaitingTheme(key: string): boolean;
   /** Quantos itens foram guardados em "sem tema" desde a última resposta (o aviso vai uma vez). */
   takeUntitledNotice(key: string): number;
+  /**
+   * Texto comum do dono (decisão da demonstração, 2026-11-26): o WhatsApp não marca como encaminhada a mensagem que
+   * o próprio dono escreveu. O texto fica na memória por 10 min, para poder ser citado. Se chegou junto (até
+   * `windowMs` pela hora da mensagem) de outro texto comum ou de um encaminhado que espera, a leva inteira passa a
+   * esperar o pedido. `windowMs = 0` desliga a leva.
+   */
+  noteText(key: string, context: C, message: CanonicalMessage, windowMs: number): BurstResult;
+  /** O texto ainda é comum, isto é, não foi levado por uma leva? */
+  isLoose(key: string, externalMessageId: string): boolean;
+  /**
+   * Uma mensagem do dono dos últimos 10 min, citada pelo "responder": texto comum ou encaminhado, guardado ou não.
+   * Deixa de ser texto comum (não entra mais numa leva), mas continua podendo ser citada.
+   */
+  takeRecent(key: string, externalMessageId: string): CanonicalMessage | null;
+}
+
+export interface BurstResult {
+  /** O texto entrou numa leva e espera o pedido, como um encaminhado. */
+  readonly batched: boolean;
+  /** A leva começou agora: é a vez do aviso. */
+  readonly opened: boolean;
 }

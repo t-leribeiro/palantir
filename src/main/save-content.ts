@@ -1,11 +1,13 @@
 // Composição do guardar com tema (feature 009, D-05, D-08, D-13; ADR-0014). O agente decide o que guardar; aqui
 // ficam a fonte Guardados, o preparo do áudio pelo `fetchMedia` do canal de origem, a duplicata no tema, a ingestão,
 // o item no `knowledge`, a auditoria sem conteúdo e a purga do arquivo esquecido pelo outbox.
+import { randomUUID } from "node:crypto";
 import type { CanonicalMessage, IngestOutcome, KnowledgeChannel } from "../contracts/channel/knowledge-channel.js";
 import {
   SAVED_AUTHOR,
   createMemoryPendingForwards,
   createPgConversationState,
+  BURST_SETTLE_MS,
   createSaveContent,
   createSavedListing,
   type SaveContentPort,
@@ -14,7 +16,7 @@ import {
   type SavedListingObserver,
   type SavedRouting,
 } from "../modules/agent/index.js";
-import { createPgSavedItems, createSavedItems, normalizeTheme, type SavedItems } from "../modules/knowledge/index.js";
+import { createPgSavedItems, createSavedItems, normalizeTheme, type SavedItems, type SavedOrigin } from "../modules/knowledge/index.js";
 import { PURGE_OBJECT_QUEUE, type PrepareAttachments } from "../modules/media/index.js";
 import { createEnsureSavedSource, createPgAuditLog, createPgSavedSourceRepository, type AuditLog, type EnsureSavedSource, type SavedSourceRef } from "../modules/sources/index.js";
 import type { AppConfig } from "../platform/config.js";
@@ -76,12 +78,43 @@ function contentKey(message: CanonicalMessage): { sha256?: string; text?: string
   return message.text === undefined ? {} : { text: message.text };
 }
 
+/**
+ * A mensagem guardada antes, de novo como mensagem do canal, para ir a outro tema (demonstração de 2026-11-26):
+ * o id externo original, a hora e o texto de quando foi guardada; o áudio aponta para o mesmo arquivo cifrado,
+ * sem baixar de novo, e é transcrito de novo pela fila da S4.
+ */
+export function fromSavedOrigin(origin: SavedOrigin, externalMessageId: string, request: CanonicalMessage): CanonicalMessage {
+  const { quotedExternalMessageId: _quoted, text: _text, ...rest } = request;
+  const a = origin.attachment;
+  const attachments = a
+    ? [{
+        id: randomUUID(),
+        mimeType: a.mimeType,
+        sha256: a.sha256,
+        storageKey: a.storageKey,
+        status: "stored" as const,
+        ...(a.sizeBytes === null ? {} : { sizeBytes: a.sizeBytes }),
+        ...(a.durationSeconds === null ? {} : { durationSeconds: a.durationSeconds }),
+      }]
+    : [];
+  return {
+    ...rest,
+    source: { ...request.source, externalMessageId },
+    timestamp: origin.sentAt.toISOString(),
+    kind: origin.kind,
+    ...(origin.text === null ? {} : { text: origin.text }),
+    isForwarded: false,
+    attachments,
+  };
+}
+
 function saveOne(parts: SaveParts): SaveContentPort["save"] {
   return async ({ context, theme, message }) => {
     if (message.kind === "audio" && !parts.prepare) return "media_off";
     const source = await parts.ensure({ spaceId: context.spaceId, provider: context.provider, externalAccountId: context.accountId });
     const draft = toSavedMessage(message, source, context.accountId, theme);
-    const ready = draft.kind === "audio" ? await preparedAudio(parts, draft) : draft;
+    const stored = draft.attachments[0]?.status === "stored";
+    const ready = draft.kind === "audio" && !stored ? await preparedAudio(parts, draft) : draft;
     if (!ready) return "failed";
     if (await parts.saved.isDuplicate(context.spaceId, theme, contentKey(ready))) return { outcome: "duplicate", theme: await parts.saved.displayName(context.spaceId, theme) };
     const outcome = await parts.ingest(ready);
@@ -104,6 +137,7 @@ export async function buildSaved(
   channel: Pick<KnowledgeChannel, "fetchMedia">,
   logger: Logger,
   observer: SavedObservers = NOOP_OBSERVERS,
+  burstMs = 0,
 ): Promise<SavedComposition> {
   const store = createPgSavedItems(pool, {
     onOrphanKeys: async (db, keys) => {
@@ -121,13 +155,20 @@ export async function buildSaved(
     audit,
   };
   const save = saveOne(parts);
-  const content: SaveContentPort = { save: (input) => withSpan("agent.save", () => save(input)) };
+  const content: SaveContentPort = {
+    save: (input) => withSpan("agent.save", () => save(input)),
+    async findSaved(context, externalMessageId, request) {
+      const origin = await saved.savedOrigin(context.spaceId, externalMessageId);
+      return origin ? fromSavedOrigin(origin, externalMessageId, request) : null;
+    },
+  };
   let untitled: (context: SaveContext, messages: readonly CanonicalMessage[]) => Promise<number> = async () => 0;
   const pending = createMemoryPendingForwards<SaveContext>({
     onUntitled: (context, messages) => untitled(context, messages),
     observer: { discarded: (count) => observer.forwarded("discarded", count) },
   });
-  const service = createSaveContent({ pending, content, observer });
+  const burst = { windowMs: burstMs, settleMs: burstMs > 0 ? BURST_SETTLE_MS : 0 };
+  const service = createSaveContent({ pending, content, observer, burst });
   untitled = (context, messages) => service.untitled(context, messages);
   const state = createPgConversationState(pool);
   const listing = createSavedListing({

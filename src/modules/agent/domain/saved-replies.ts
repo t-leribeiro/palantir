@@ -60,7 +60,8 @@ export interface SaveSummary {
 }
 
 function savedSentence(s: SaveSummary): string | null {
-  if (s.saved === 0 && s.duplicates > 0) return `Isso já estava guardado em ${s.theme}.`;
+  if (s.saved === 0 && s.duplicates === 1) return `Isso já estava guardado em ${s.theme}.`;
+  if (s.saved === 0 && s.duplicates > 1) return `Os ${s.duplicates} itens já estavam guardados em ${s.theme}.`;
   if (s.saved === 0) return null;
   const head = s.saved === 1 ? `Guardei em ${s.theme}.` : `Guardei ${s.saved} itens em ${s.theme}.`;
   if (s.duplicates === 0) return head;

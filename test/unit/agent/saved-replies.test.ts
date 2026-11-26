@@ -20,6 +20,8 @@ describe("resposta do guardar", () => {
 
   it("avisa a duplicata, sozinha ou junto do que foi guardado", () => {
     expect(composeSaveReply({ ...none, duplicates: 1 }).text).toBe("Isso já estava guardado em arquitetura.");
+    // Demonstração de 2026-11-26: a mesma leva de 6 guardada de novo no mesmo tema.
+    expect(composeSaveReply({ ...none, duplicates: 6 }).text).toBe("Os 6 itens já estavam guardados em arquitetura.");
     expect(composeSaveReply({ ...none, saved: 2, duplicates: 1 }).text).toBe("Guardei 2 itens em arquitetura; 1 já estava guardado.");
   });
 

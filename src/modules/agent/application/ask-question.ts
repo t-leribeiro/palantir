@@ -9,7 +9,7 @@ import { questionScope, type CatalogEntry } from "../domain/question.js";
 import { parseShowSource } from "../domain/show-source.js";
 import type { CitationStore } from "./conversation-state.js";
 import type { ManageSources } from "./manage-sources.js";
-import { afterCommands, beforeCommands, holdIfContent, withUntitledNotice, type SavedRouting } from "./route-message.js";
+import { afterCommands, beforeCommands, holdIfContent, screenText, withUntitledNotice, type SavedRouting } from "./route-message.js";
 import type { ShowSource } from "./show-source.js";
 
 /** Porta de geração de resposta (ADR-0007). A feature do agente adiciona uma implementação com LLM. */
@@ -134,13 +134,16 @@ const STEPS: readonly Step[] = [
   (_deps, _ctx, question) => (isHelpRequest(question) ? helpReply() : null),
 ];
 
-async function answerActive(deps: AskQuestionDeps, ctx: ActiveContext, message: CanonicalMessage): Promise<AgentReply> {
+/** `null` quando o texto entrou numa leva de encaminhados que já recebeu o aviso (009). */
+async function answerActive(deps: AskQuestionDeps, ctx: ActiveContext, message: CanonicalMessage): Promise<AgentReply | null> {
   const question = textOf(message);
   if (question === "") return noEvidenceReply();
   for (const step of STEPS) {
     const reply = await step(deps, ctx, question, message);
     if (reply) return reply;
   }
+  const screened = deps.saved ? await screenText(deps.saved, ctx, message) : undefined;
+  if (screened !== undefined) return screened;
   const results = await searchInScope(deps, ctx.spaceId, question);
   if ("outcome" in results) return results;
   return remember(deps, ctx, await answerWithValidCitations(deps.generator, question, results));

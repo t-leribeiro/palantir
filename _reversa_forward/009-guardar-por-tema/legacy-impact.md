@@ -4,7 +4,7 @@
 > Data: `2026-11-26`
 > Feature greenfield sobre as features 001 a 008, sem legado extraído de código. Âncora: `prd.md`, as specs SDD e os adendos `addenda/001-*` a `addenda/008-*` e `addenda/bug-*`.
 > Política de edição no momento da execução: `allowLegacyEdits: true`, `allowedPaths: []` (projeto inteiro liberado).
-> Execução: 23 de 23 ações.
+> Execução: 26 de 26 ações (T024 a T026 vieram da demonstração com o chip).
 
 ## Arquivos afetados
 
@@ -24,6 +24,9 @@
 | `src/channels/whatsapp/whatsapp-channel.ts`, `capture.ts` | whatsapp-baileys-adapter | delta-de-contrato-externo | HIGH | `CanonicalMessage` direto com `isForwarded`, `quotedExternalMessageId`, a legenda em `text` e o anexo de áudio com `fetchRef`. O esquema não mudou: continua 1.4.0 |
 | `src/channels/fake/fake-channel.ts`, `http-routes.ts`, `contracts/openapi.yaml` | channel-contract (canal de teste) | delta-de-contrato-externo | LOW | `FakeAgentRequest` com campos opcionais: id, tipo, encaminhada, citada, legenda e áudio em base64. Texto até 50.000 caracteres, obrigatório só para `text` |
 | `src/main/save-content.ts` (novo), `compose.ts`, `media.ts` | platform-foundation | componente-novo | HIGH | Composição do guardar por canal, preparo de mídia reaproveitável, worker de purga, varredura da espera, observadores |
+| `src/modules/agent/application/pending-forwards.ts`, `infrastructure/memory-pending-forwards.ts`, `application/save-content.ts`, `route-message.ts`, `ask-question.ts` (T024, T025) | conversational-agent | regra-alterada | HIGH | Textos do dono que chegam juntos formam uma leva que espera o pedido. Um texto sozinho espera 1,5 s antes de virar pergunta. Textos que viraram pergunta ficam 10 min na memória para poder ser citados |
+| `src/modules/knowledge/application/saved-items.ts`, `infrastructure/pg-saved-items.ts`, `src/main/save-content.ts` (T026) | knowledge-indexing | regra-nova | MEDIUM | `savedOrigin` acha a mensagem guardada pelo id externo original; a composição copia para o tema novo, reaproveitando o arquivo do áudio sem baixar de novo |
+| `src/platform/config.ts`, `.env.example`, `docs/adr/0014-guardar-conteudo-encaminhado.md` (T024) | platform-foundation | regra-alterada | LOW | `PALANTIR_WHATSAPP_BURST_MS` (2000 por padrão, 0 desliga); adendo do ADR-0014 |
 | `infra/local/config/grafana/dashboards/gestao.json` | platform-foundation | regra-alterada | LOW | Três painéis: guardar, encaminhados e listagens |
 | `test/**` (unit, integration, contract, e2e) | platform-foundation | componente-novo | LOW | TDD da fatia. A suíte de contrato ganhou `simulateDirect`. Os testes de esquema da 0008 e da 0010 desfazem uma migração a mais. O E2E da S2 espera o aviso de guardar para o áudio |
 | `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/plano-de-fatias.md` | platform-foundation | regra-alterada | LOW | Como guardar e recuperar; onde ficam as peças; S8 em andamento |

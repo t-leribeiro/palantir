@@ -24,8 +24,9 @@
 10. **Na resposta normal.** Pergunte sobre o assunto de algo guardado. A resposta pode citar "Guardados · <tema>" junto com as conversas.
 11. **Esquecer.** Liste "leituras" e mande "esquece a 1", depois "confirmo". Liste de novo: o item sumiu.
 12. **Sem pedido.** Encaminhe uma mensagem e espere 10 minutos sem pedir nada. Mande "guarda em teste": "Não há nada para guardar."
+12a. **Suas próprias mensagens.** O WhatsApp não marca como encaminhada a mensagem que você mesmo escreveu. Encaminhe de uma vez 3 anotações suas: vem um aviso só, e "guarda em ideias" guarda as 3. Encaminhe uma anotação sozinha: ela vira pergunta. Responda citando ela com "guarda em ideias": "Guardei em ideias."
 13. **Ajuda.** Mande "ajuda": aparecem "guarda em <tema>" e "guardados <tema>".
-14. **Apagar tudo (opcional, no fim).** Mande "grupos": "Guardados (N itens)" aparece no fim da lista. "apagar Guardados" e "confirmo apagar Guardados" apagam todos os itens.
+14. **Apagar tudo (opcional, no fim).** Mande "grupos": "Guardados · seus itens guardados" aparece no fim da lista, sem a quantidade de itens. "apagar Guardados" e "confirmo apagar Guardados" apagam todos os itens.
 
 ## O que conferir fora do WhatsApp
 

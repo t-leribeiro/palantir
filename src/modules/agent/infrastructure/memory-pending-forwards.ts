@@ -2,7 +2,7 @@
 // contagem fica); o que aguardava tema há 10 min vai para "sem tema" pelo `onUntitled`. Reiniciar o processo perde
 // tudo o que esperava, de propósito: nada do que o dono não pediu toca o disco (ADR-0014).
 import type { CanonicalMessage } from "../../../contracts/channel/knowledge-channel.js";
-import { PENDING_HARD_LIMIT, PENDING_TTL_MS, type AddResult, type PendingForwards } from "../application/pending-forwards.js";
+import { PENDING_HARD_LIMIT, PENDING_TTL_MS, type AddResult, type BurstResult, type PendingForwards } from "../application/pending-forwards.js";
 
 export const SWEEP_INTERVAL_MS = 30_000;
 
@@ -14,6 +14,10 @@ interface Entry {
 interface Bucket<C> {
   context: C;
   entries: Entry[];
+  /** Textos comuns recentes (viraram pergunta), para a leva e o "responder"; somem em 10 min. */
+  recent: Entry[];
+  /** Tudo o que o dono mandou nos últimos 10 min, guardado ou não, para o "responder" achar (só a citação lê). */
+  seen: Entry[];
   awaitingSince: number | undefined;
   untitled: number;
 }
@@ -44,7 +48,18 @@ export function createMemoryPendingForwards<C>(options: MemoryPendingOptions<C> 
 
   const bucketOf = (key: string) => buckets.get(key);
   const dropIfEmpty = (key: string, bucket: Bucket<C>) => {
-    if (bucket.entries.length === 0 && bucket.untitled === 0) buckets.delete(key);
+    if (bucket.entries.length === 0 && bucket.recent.length === 0 && bucket.seen.length === 0 && bucket.untitled === 0) buckets.delete(key);
+  };
+  const ensure = (key: string, context: C): Bucket<C> => {
+    const bucket = bucketOf(key) ?? { context, entries: [], recent: [], seen: [], awaitingSince: undefined, untitled: 0 };
+    bucket.context = context;
+    buckets.set(key, bucket);
+    return bucket;
+  };
+  const idOf = (entry: Entry) => entry.message.source.externalMessageId;
+  const see = (bucket: Bucket<C>, message: CanonicalMessage) => {
+    if (bucket.seen.length >= PENDING_HARD_LIMIT) bucket.seen.shift();
+    bucket.seen.push({ message, at: now() });
   };
 
   async function settleAwaiting(key: string, bucket: Bucket<C>): Promise<void> {
@@ -61,21 +76,22 @@ export function createMemoryPendingForwards<C>(options: MemoryPendingOptions<C> 
     const alive = bucket.entries.filter((e) => at - e.at < ttl);
     const gone = bucket.entries.length - alive.length;
     bucket.entries = alive;
+    bucket.recent = bucket.recent.filter((e) => at - e.at < ttl);
+    bucket.seen = bucket.seen.filter((e) => at - e.at < ttl);
     if (gone > 0) options.observer?.discarded(gone);
     dropIfEmpty(key, bucket);
   }
 
   const store: MemoryPendingForwards<C> = {
     add(key, context, message): AddResult {
-      const bucket = bucketOf(key) ?? { context, entries: [], awaitingSince: undefined, untitled: 0 };
-      bucket.context = context;
-      buckets.set(key, bucket);
+      const bucket = ensure(key, context);
       const opened = bucket.entries.length === 0;
       if (bucket.entries.length >= PENDING_HARD_LIMIT) {
         options.observer?.discarded(1);
         return { opened: false, accepted: false };
       }
       bucket.entries.push({ message, at: now() });
+      if (!bucket.seen.some((e) => e.message === message)) see(bucket, message);
       return { opened, accepted: true };
     },
     takeAll(key) {
@@ -111,6 +127,29 @@ export function createMemoryPendingForwards<C>(options: MemoryPendingOptions<C> 
       dropIfEmpty(key, bucket);
       return count;
     },
+    noteText(key, context, message, windowMs): BurstResult {
+      const bucket = ensure(key, context);
+      const sent = sentAt(message);
+      const close = (entry: Entry) => windowMs > 0 && Math.abs(sentAt(entry.message) - sent) <= windowMs;
+      const mates = bucket.recent.filter(close);
+      if (mates.length === 0 && !bucket.entries.some(close)) {
+        if (bucket.recent.length >= PENDING_HARD_LIMIT) bucket.recent.shift();
+        bucket.recent.push({ message, at: now() });
+        see(bucket, message);
+        return { batched: false, opened: false };
+      }
+      bucket.recent = bucket.recent.filter((e) => !mates.includes(e));
+      const added = [...mates.map((e) => e.message), message].map((m) => store.add(key, context, m));
+      return { batched: true, opened: added.some((a) => a.opened) };
+    },
+    isLoose: (key, externalMessageId) => bucketOf(key)?.recent.some((e) => idOf(e) === externalMessageId) ?? false,
+    takeRecent(key, externalMessageId) {
+      const bucket = bucketOf(key);
+      const entry = bucket?.seen.find((e) => idOf(e) === externalMessageId);
+      if (!bucket || !entry) return null;
+      bucket.recent = bucket.recent.filter((e) => idOf(e) !== externalMessageId);
+      return entry.message;
+    },
     async sweep() {
       const at = now();
       for (const [key, bucket] of [...buckets]) {
@@ -125,4 +164,10 @@ export function createMemoryPendingForwards<C>(options: MemoryPendingOptions<C> 
     },
   };
   return store;
+}
+
+/** A hora da mensagem no aplicativo (a leva compara essa hora, não a de chegada ao processo). */
+function sentAt(message: CanonicalMessage): number {
+  const at = Date.parse(message.timestamp);
+  return Number.isNaN(at) ? Number.NEGATIVE_INFINITY : at;
 }

@@ -16,7 +16,14 @@ describe("configuração do canal WhatsApp", () => {
       sessionDir: join(homedir(), ".palantir", "whatsapp"),
       healthPort: 8081,
       capture: "off",
+      burstMs: 2000,
     });
+  });
+
+  it("leva de textos do dono (feature 009): 2 s por padrão, 0 desliga, até 10 s", () => {
+    expect(loadConfig({ ...base, PALANTIR_WHATSAPP_BURST_MS: "0" }).whatsapp.burstMs).toBe(0);
+    expect(loadConfig({ ...base, PALANTIR_WHATSAPP_BURST_MS: "3000" }).whatsapp.burstMs).toBe(3000);
+    expect(() => loadConfig({ ...base, PALANTIR_WHATSAPP_BURST_MS: "60000" })).toThrow(/PALANTIR_WHATSAPP_BURST_MS/);
   });
 
   it("modo de captura (feature 004, D-01): off por padrão, agent ou dedicated", () => {

@@ -38,6 +38,15 @@ Mensagens diretas ao agente eram perguntas e nunca viravam base pesquisável (S2
 - Reiniciar o processo do canal perde o que esperava pedido. Basta encaminhar de novo.
 - O tema é tratado como conteúdo: pode ter nomes de pessoas ou de clientes e nunca vai para log, métrica ou trace.
 
+## Adendo de 2026-11-26: mensagens do próprio dono
+
+Na demonstração com o chip, o WhatsApp não marcou como encaminhada a mensagem que o próprio dono escreveu (anotações e links que ele mesmo mandou em outra conversa). Ela chega igual a uma mensagem digitada e virava pergunta. Decisão do dono:
+
+1. **Leva.** Textos comuns do dono que chegam juntos, até `PALANTIR_WHATSAPP_BURST_MS` (2 s por padrão) um do outro pela hora da mensagem, são uma leva encaminhada. A leva espera o "guarda em X" como um encaminhado, com um aviso só. O texto sozinho espera 1,5 s antes de virar pergunta, para a leva ter tempo de chegar. O canal de teste não usa a leva.
+2. **Citar.** Tudo o que o dono mandou ao agente nos últimos 10 minutos fica só na memória do processo: texto comum que virou pergunta, encaminhado e o que já foi guardado. "guarda em X" respondendo citando uma dessas mensagens guarda ela nesse tema, inclusive num segundo tema. Passados os 10 minutos, a citada é procurada entre os guardados pelo id original e copiada para o tema novo (o áudio reaproveita o mesmo arquivo cifrado e é transcrito de novo). Uma mensagem que nunca foi guardada não é achada: ela não existe fora da memória.
+
+Vale a mesma regra da decisão: só memória, nada no banco nem em log, e some sem rastro em 10 minutos. Duas perguntas digitadas a menos de 2 s uma da outra viram uma leva, o que é raro; `PALANTIR_WHATSAPP_BURST_MS=0` desliga.
+
 ## Quando revisar
 
 - Antes de qualquer uso por mais de uma pessoa, porque o espaço compartilhado está fora da v0.1.

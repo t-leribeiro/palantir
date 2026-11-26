@@ -10,7 +10,7 @@ export interface SeededChunk {
 
 export async function insertMessageWithChunk(
   db: Queryable,
-  input: { spaceId: string; sourceId: string; text: string; author?: string; kind?: "text" | "audio"; sentAt?: Date },
+  input: { spaceId: string; sourceId: string; text: string; author?: string; kind?: "text" | "audio"; sentAt?: Date; externalId?: string },
 ): Promise<SeededChunk> {
   const author = input.author ?? "Ana";
   const participant = one(
@@ -26,7 +26,7 @@ export async function insertMessageWithChunk(
   await db.query(
     `INSERT INTO messages (id, space_id, source_id, participant_id, external_message_id, kind, text, sent_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [messageId, input.spaceId, input.sourceId, participant, `ext-${messageId}`, input.kind ?? "text", input.text, input.sentAt ?? new Date()],
+    [messageId, input.spaceId, input.sourceId, participant, input.externalId ?? `ext-${messageId}`, input.kind ?? "text", input.text, input.sentAt ?? new Date()],
   );
   const chunkId = one(
     (

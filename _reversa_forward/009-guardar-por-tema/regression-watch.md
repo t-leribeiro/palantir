@@ -27,6 +27,7 @@
 | W011 | `requirements.md#RF-01`, `RF-12` (D-01, D-02, D-16) | A mensagem direta traz `isForwarded`, `quotedExternalMessageId`, a legenda e o áudio com `fetchRef`, nos dois canais, sem mudar a versão do contrato | `test/contract/channel-contract-suite.ts`, `test/unit/whatsapp/mapping.test.ts`, `test/unit/whatsapp/baileys-media.test.ts`, `test/unit/http/fake-routes.test.ts` |
 | W012 | `requirements.md#RN-12`, `RF-11` (D-17, D-18) | Logs, métricas, traces e auditoria sem conteúdo, tema nem telefone; métricas só com resultado e tipo | `test/unit/agent/otel-save-observer.test.ts`, `test/e2e/save-by-theme.test.ts` |
 | W013 | `requirements.md#RF-10` (D-19) | A ajuda ensina "guarda em" e "guardados", sem "só entendo texto", com até 600 caracteres | `test/unit/agent/help-and-policy.test.ts`, `test/e2e/save-by-theme.test.ts` |
+| W014 | `requirements.md#9` (sessão da demonstração), adendo do ADR-0014 | Textos do dono que chegam juntos (até 2 s pela hora da mensagem) formam uma leva que espera o pedido, com um aviso; "guarda em X" citando qualquer mensagem do dono dos últimos 10 min, guardada ou não, guarda essa mensagem nesse tema; tudo só na memória; depois dos 10 min, a citada é procurada entre os guardados pelo id original e copiada para o tema novo | `test/unit/agent/save-burst.test.ts`, `test/e2e/save-by-theme.test.ts` |
 
 ## Histórico de re-extrações
 

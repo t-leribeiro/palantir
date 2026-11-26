@@ -8,7 +8,7 @@
 
 | Métrica | Valor |
 |---------|-------|
-| Total de ações | 23 |
+| Total de ações | 26 (23 do plano e 3 da demonstração) |
 | Paralelizáveis (`[//]`) | 16 |
 | Maior cadeia de dependência | 6 (T006 → T012 → T013 → T014 → T021 → T022) |
 
@@ -69,6 +69,14 @@
 | T022 | **Observabilidade** (D-18):<br>• observador OTel com `agent_save_total{outcome, kind}`, `agent_saved_listing_total{outcome}` e `agent_forwarded_total{outcome}`;<br>• span `agent.save` sem atributos de conteúdo;<br>• painel "Gestão".<br>Teste unitário de que nenhum rótulo leva tema nem texto | T021 | - | `src/modules/agent/infrastructure/otel-save-observer.ts` | 🟢 | `[X]` |
 | T023 | **Documentação curta:**<br>• parágrafo da S8 no `README.md`;<br>• linha de estado e "Guardar (S8)" no `CLAUDE.md` e no `AGENTS.md`;<br>• S8 "🔄 em andamento" no `docs/plano-de-fatias.md`, com a linha no registro | - | `[//]` | `README.md` | 🟢 | `[X]` |
 
+## Fase 6, Ajustes da demonstração
+
+| ID | Descrição | Dependências | Paralelismo | Arquivo alvo | Confidência | Status |
+|----|-----------|--------------|-------------|--------------|-------------|--------|
+| T024 | **Leva de textos do dono** (demonstração de 2026-11-26, adendo do ADR-0014):<br>• `noteText`, `isLoose` e `takeRecent` na espera em memória;<br>• `screen` no guardar, antes da busca: texto a até `PALANTIR_WHATSAPP_BURST_MS` (2 s) de outro texto comum ou de um encaminhado que espera entra na leva; o sozinho espera 1,5 s antes de virar pergunta;<br>• só o WhatsApp liga a leva; o canal de teste não.<br>Testes unitários e cenário E2E | T011, T012, T013 | - | `src/modules/agent/infrastructure/memory-pending-forwards.ts` | 🟡 | `[X]` |
+| T025 | **Citar uma mensagem recente:** "guarda em X" respondendo a qualquer mensagem do dono dos últimos 10 min (texto comum que virou pergunta, encaminhado, guardado ou não) guarda essa mensagem nesse tema. Teste unitário e cenário E2E | T024 | - | `src/modules/agent/application/save-content.ts` | 🟡 | `[X]` |
+| T026 | **Citar depois dos 10 min:** a citada que saiu da memória é procurada entre os guardados pelo id original (`savedOrigin` no `knowledge`) e copiada para o tema novo; o áudio reaproveita o arquivo cifrado e é transcrito de novo. Teste de integração, unitário e cenário E2E | T025 | - | `src/modules/knowledge/infrastructure/pg-saved-items.ts` | 🟡 | `[X]` |
+
 ## Notas de execução
 
 - **T001:** além do `data-delta.md` §2, `audit_events.target_kind` ganhou `knowledge_item`. Os testes de esquema da 0008 e da 0010 passaram a desfazer uma migração a mais.
@@ -98,9 +106,17 @@
   - integração: 15 arquivos tocados, todos verdes;
   - E2E da S8 e os da S0, S2, S5 e S7, todos verdes.
 - **Desempenho da S1:** o teste de 10.000 mensagens em até 2 minutos levou cerca de 155 s nesta máquina, mesmo rodando sozinho. O motor de sentido ocupava 4,7 GB de memória. A S8 não toca o caminho da importação, e a CI confere.
+- **T024 e T025 (demonstração de 2026-11-26):**
+  - a foto encaminhada foi guardada, mas links e anotações do próprio dono viraram pergunta: o WhatsApp não marca como encaminhada a mensagem que o dono escreveu;
+  - na segunda rodada, a mesma leva de 6 encaminhada com "guarda em ideias" como comentário foi reconhecida inteira como duplicata (métrica `agent_save_total{outcome="duplicate"}` = 6), mas a resposta dizia "Isso já estava guardado", no singular. Agora diz "Os 6 itens já estavam guardados em ideias.";
+  - na terceira rodada, a leva foi guardada em "ideias" e, 2 minutos depois, um dos links citado com "guarda em decisões" respondeu "Não achei": guardar tirava a mensagem da memória. Agora tudo o que o dono mandou fica citável por 10 min, guardado ou não;
+  - o dono pediu que a citação funcione também depois dos 10 min (T026): a busca é entre os guardados, pelo id externo original, que já fica no id da mensagem guardada (`<original>#<tema>`). O que nunca foi guardado continua sem ser achado, porque não existe fora da memória;
+  - o simulador dos E2E manda as mensagens com a hora atual. Os E2E do WhatsApp fora da S8 desligam a leva (`PALANTIR_WHATSAPP_BURST_MS=0`), e o da S8 avança a hora 5 s por envio;
+  - gates: tipos, lint, arquitetura; unitários, arquitetura e contrato com 739 aprovados (o `real-exports.test.ts` estourou o prazo sob carga, como antes); E2E da S8, S2, S7, S5, S3 e S4 verdes.
 
 ## Histórico de alterações
 
 | Data | Alteração | Autor |
 |------|-----------|-------|
 | 2026-11-26 | Versão inicial gerada por `/reversa-to-do` | reversa |
+| 2026-11-26 | T024 e T025, da demonstração com o chip | reversa |

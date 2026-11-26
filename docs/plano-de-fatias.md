@@ -20,6 +20,13 @@
 
 Legenda: ✅ entregue · 🔄 em andamento · ⏳ planejada · ⛔ bloqueada
 
+## Ideias registradas (fora do plano da v0.1)
+
+- **Consolidação diária do conhecimento** (pedido do dono em 2026-11-26, na demonstração da S8). Guardar 100% do que o dono manda ao agente durante o dia e, no fim do dia, rodar um processo de consolidação, como o cérebro faz no sono: descarta o que não vale guardar e guarda e classifica por tema o que faz sentido. Hoje vale o contrário (ADR-0014): nada do que o dono não pediu toca o disco. Antes de virar fatia, precisa de:
+  - um ADR novo que substitua essa parte do ADR-0014 (guardar conteúdo de terceiros sem pedido explícito, por quanto tempo e cifrado como; o que acontece se a consolidação falhar);
+  - decidir quem julga o que vale guardar e o tema (palavras fixas, o motor de sentido local, o LLM da S9 ou o verificador do ADR-0013), e o que o dono vê e aprova antes do descarte;
+  - provável dependência da S9 (LLM) para classificar por tema.
+
 ## Componentes (specs) por fatia
 
 | Fatia | Specs em `_reversa_sdd/sdd/` |
@@ -68,4 +75,5 @@ Legenda: ✅ entregue · 🔄 em andamento · ⏳ planejada · ⛔ bloqueada
 | 2026-11-25 | Correção da S4 (PR #18, bugs #7 e #8 de `_reversa_bugs/transcricao-de-audios`): 36 áudios do T3 estavam `failed` como "motor indisponível". Dois defeitos no prazo da chamada ao motor: o `fetch` do Node cortava aos 300 s as transcrições mais longas (agora o adaptador usa um transporte próprio sobre `node:http`, sem esse limite), e, para durações decimais, o prazo saía não inteiro e o `AbortSignal.timeout` recusava a chamada antes de ela sair (agora arredondado para cima). Os 36 voltaram à fila e os 160 áudios do T3 estão transcritos. |
 | 2026-11-25 | S7 iniciada como feature `008`. Decisões: "mostra a N" por palavras fixas, sem LLM, válido por 2 h; as citações ficam no estado curto da S5, só com ids; a mensagem citada inteira com 3 vizinhas de cada lado; para áudio, a transcrição completa com o trecho marcado e o arquivo, por referência no contrato do canal 1.4.0, lido do armazenamento cifrado só para o dono e enviado pelo WhatsApp como mensagem de voz. 17 ações, um pouco acima das ~15 da regra, mantidas numa fatia só. |
 | 2026-11-25 | S7 entregue e demonstrada pelo WhatsApp com o chip (PR #19), pelo roteiro do `onboarding.md` da 008: "mostra a N" trouxe a mensagem inteira com a conversa em volta e, para áudio, a transcrição marcada e o arquivo como mensagem de voz, o que confirma a premissa do `ptt` na versão rc do Baileys. A demonstração não expôs problemas. |
+| 2026-11-26 | Demonstração da S8: o WhatsApp não marca como encaminhada a mensagem que o próprio dono escreveu. Decisões: textos que chegam juntos formam uma leva; responder citando guarda qualquer mensagem dos últimos 10 min e, depois disso, procura entre os guardados. Registrada a ideia da consolidação diária do conhecimento (fora do plano da v0.1). |
 | 2026-11-26 | S8 iniciada como feature `009`. Decisões: palavras fixas, sem LLM; o encaminhado espera o pedido só na memória por 10 min (ADR-0014); guardar ingere na fonte Guardados do espaço pela ingestão comum, com o autor "Você" (o WhatsApp não informa o autor original), e cria o item com o tema no `knowledge`; o contrato do canal não muda de versão, porque a marca de encaminhado e a citada já existiam. 23 ações, acima das ~15 da regra, mantidas numa fatia só. |

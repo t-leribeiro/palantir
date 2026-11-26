@@ -27,6 +27,11 @@ export type StoredOutcome = Exclude<SaveItemOutcome, "no_caption" | "unsupported
  */
 export interface SaveContentPort {
   save(input: { readonly context: SaveContext; readonly theme: string; readonly message: CanonicalMessage }): Promise<StoredOutcome | { readonly outcome: StoredOutcome; readonly theme: string }>;
+  /**
+   * A citada que já saiu da memória (passou dos 10 min), procurada entre os guardados pelo id original e montada
+   * como mensagem a partir do pedido (`request`). `null` quando nunca foi guardada.
+   */
+  findSaved?(context: SaveContext, externalMessageId: string, request: CanonicalMessage): Promise<CanonicalMessage | null>;
 }
 
 /** Métricas sem conteúdo nem tema (D-18). */
@@ -48,11 +53,28 @@ export function classify(message: CanonicalMessage): SavedKind | "no_caption" | 
   return "unsupported";
 }
 
+/**
+ * Leva de textos comuns (decisão da demonstração, 2026-11-26): o que chega junto, até `windowMs` pela hora da
+ * mensagem, espera o pedido como um encaminhado. O texto sozinho espera `settleMs` antes de virar pergunta, para a
+ * leva ter tempo de chegar. `windowMs = 0` desliga (canal de teste).
+ */
+export interface BurstOptions {
+  readonly windowMs: number;
+  readonly settleMs: number;
+  readonly sleep?: (ms: number) => Promise<void>;
+}
+
+/** Quanto o texto sozinho espera antes de virar pergunta, com a leva ligada (`PALANTIR_WHATSAPP_BURST_MS`). */
+export const BURST_SETTLE_MS = 1_500;
+
 export interface SaveDeps {
   readonly pending: PendingForwards<SaveContext>;
   readonly content: SaveContentPort;
   readonly observer?: SaveObserver;
+  readonly burst?: BurstOptions;
 }
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 type Counts = { -readonly [K in keyof Omit<SaveSummary, "theme">]: number };
 const FIELD: Record<SaveItemOutcome, keyof Counts> = {
@@ -66,6 +88,7 @@ const FIELD: Record<SaveItemOutcome, keyof Counts> = {
 
 export function createSaveContent(deps: SaveDeps) {
   const observer = deps.observer ?? NOOP_OBSERVER;
+  const burst = { windowMs: deps.burst?.windowMs ?? 0, settleMs: deps.burst?.settleMs ?? 0, sleep: deps.burst?.sleep ?? defaultSleep };
 
   async function saveOne(context: SaveContext, theme: string, message: CanonicalMessage): Promise<{ outcome: SaveItemOutcome; theme?: string }> {
     const kind = classify(message);
@@ -93,11 +116,19 @@ export function createSaveContent(deps: SaveDeps) {
     return { theme: shown, ...counts };
   }
 
+  /** A citada: na memória (10 min) ou, depois disso, entre os guardados. */
+  async function findQuoted(context: SaveContext, quotedId: string, request: CanonicalMessage): Promise<CanonicalMessage | null> {
+    const key = pendingKey(context);
+    const inMemory = deps.pending.take(key, quotedId) ?? deps.pending.takeRecent(key, quotedId);
+    if (inMemory || !deps.content.findSaved) return inMemory;
+    return deps.content.findSaved(context, quotedId, request).catch(() => null);
+  }
+
   /** O que esperava, ou só a citada; a resposta pronta quando não há o que guardar. */
-  function pickPending(context: SaveContext, quotedId: string | undefined): { readonly messages: readonly CanonicalMessage[] } | { readonly reply: AgentReply } {
+  async function pickPending(context: SaveContext, request: CanonicalMessage, quotedId: string | undefined): Promise<{ readonly messages: readonly CanonicalMessage[] } | { readonly reply: AgentReply }> {
     const key = pendingKey(context);
     if (quotedId) {
-      const quoted = deps.pending.take(key, quotedId);
+      const quoted = await findQuoted(context, quotedId, request);
       if (quoted) return { messages: [quoted] };
       observer.saved("not_found");
       return { reply: info(SAVE_TEXT.quotedNotFound) };
@@ -114,7 +145,7 @@ export function createSaveContent(deps: SaveDeps) {
     if (theme === "too_long") return info(SAVE_TEXT.themeTooLong);
     if (theme === "empty") return askTheme(context);
     if (from.inline !== undefined) return composeSaveReply(await saveAll(context, theme.name, [{ ...request, kind: "text", text: from.inline }]));
-    const picked = pickPending(context, from.quotedId);
+    const picked = await pickPending(context, request, from.quotedId);
     if ("reply" in picked) return picked.reply;
     return composeSaveReply(await saveAll(context, theme.name, picked.messages));
   }
@@ -135,6 +166,22 @@ export function createSaveContent(deps: SaveDeps) {
       if (!added.accepted) return null;
       observer.forwarded(added.opened ? "noticed" : "queued");
       return added.opened ? info(SAVE_TEXT.received) : null;
+    },
+    /**
+     * Texto comum, antes de virar pergunta: entra numa leva (o primeiro da leva recebe o aviso; os outros, nada) ou
+     * fica na memória para poder ser citado. `undefined` quando segue como pergunta.
+     */
+    async screen(context: SaveContext, message: CanonicalMessage): Promise<AgentReply | null | undefined> {
+      const key = pendingKey(context);
+      const noted = deps.pending.noteText(key, context, message, burst.windowMs);
+      if (noted.batched) {
+        observer.forwarded(noted.opened ? "noticed" : "queued");
+        return noted.opened ? info(SAVE_TEXT.received) : null;
+      }
+      const id = message.source.externalMessageId;
+      if (burst.windowMs === 0 || burst.settleMs === 0 || !id) return undefined;
+      await burst.sleep(burst.settleMs);
+      return deps.pending.isLoose(key, id) ? undefined : null;
     },
     /** O pedido de guardar (RN-01). */
     run(context: SaveContext, command: SaveCommand, request: CanonicalMessage): Promise<AgentReply> {

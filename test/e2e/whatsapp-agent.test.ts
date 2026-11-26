@@ -50,7 +50,7 @@ async function sendAndCollect(input: IncomingDirect): Promise<string[]> {
 beforeAll(async () => {
   db = await startTestDatabase();
   await seedOperator(db.pool);
-  const config = loadConfig({ DATABASE_URL: db.url, LOG_LEVEL: "error" });
+  const config = loadConfig({ DATABASE_URL: db.url, PALANTIR_WHATSAPP_BURST_MS: "0", LOG_LEVEL: "error" });
   worker = await startWorker(config, { metrics });
   await runImport({ file: sample, conversation: "Comunidade DevOps", timeZone: "America/Sao_Paulo", owner: OWNER }, db.pool, db.url);
   await linkVerified({ number: "+55 11 98888-7777", owner: OWNER }, db.pool);

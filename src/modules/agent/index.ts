@@ -57,6 +57,7 @@ export { SWEEP_INTERVAL_MS, createMemoryPendingForwards, type MemoryPendingForwa
 export {
   classify,
   createSaveContent,
+  BURST_SETTLE_MS,
   pendingKey,
   type SaveContentPort,
   type SaveContentService,
