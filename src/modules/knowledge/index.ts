@@ -21,3 +21,19 @@ export { NOOP_EMBEDDING_OBSERVER, createEmbedMessageChunks, embedBatch, type Emb
 export { createSweepEmbeddings, type SweepEmbeddings, type SweepOptions, type SweepResult } from "./application/sweep-embeddings.js";
 export { createActiveModelQueryEmbedding, type ActiveQueryVector, type QueryEmbeddingOptions } from "./application/query-embedding.js";
 export { createOtelEmbeddingObserver, type OtelEmbeddingObserver } from "./infrastructure/otel-embedding-observer.js";
+export { THEME_MAX_CHARS, UNTITLED_THEME, normalizeTheme, parseTheme, type Theme, type ThemeProblem } from "./domain/theme.js";
+export {
+  InvalidThemeError,
+  LISTING_LIMIT,
+  THEMES_LIMIT,
+  createSavedItems,
+  type ForgetResult,
+  type SavedContent,
+  type SavedEntry,
+  type SavedItemStore,
+  type SavedItems,
+  type SavedMessage,
+  type ThemeCount,
+  type ThemeListing,
+} from "./application/saved-items.js";
+export { createPgSavedItems, type OrphanKeysHook } from "./infrastructure/pg-saved-items.js";

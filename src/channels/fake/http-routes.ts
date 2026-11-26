@@ -1,7 +1,7 @@
 // Rotas HTTP do canal fake (interfaces/http-api.md). Só registradas com PALANTIR_FAKE_CHANNEL=true.
 import type { FastifyPluginAsync } from "fastify";
 import { componentSchema } from "../../platform/http/openapi.js";
-import type { FakeAgentMessage, FakeChannel, FakeInbound } from "./fake-channel.js";
+import { fromAgentRequest, type FakeAgentRequest, type FakeChannel, type FakeInbound } from "./fake-channel.js";
 
 const BASE = "/v1/channels/fake";
 
@@ -25,12 +25,12 @@ export function fakeChannelRoutes(channel: FakeChannel): FastifyPluginAsync {
       },
     );
 
-    app.post<{ Body: FakeAgentMessage }>(
+    app.post<{ Body: FakeAgentRequest }>(
       `${BASE}/agent`,
       { schema: { body: componentSchema("FakeAgentRequest") } },
       async (request, reply) => {
         try {
-          const answer = await channel.receiveAgentMessage(request.body);
+          const answer = await channel.receiveAgentMessage(fromAgentRequest(request.body));
           return answer ? reply.status(200).send(answer) : reply.status(204).send();
         } catch (error) {
           app.log.error({ err: { name: (error as Error).name } }, "falha ao responder pergunta ao agente");

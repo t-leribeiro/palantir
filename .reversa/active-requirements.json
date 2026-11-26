@@ -1,9 +1,9 @@
 {
   "schema-version": 1,
-  "feature-dir": "_reversa_forward/008-mostrar-original-com-contexto",
-  "feature-id": "008",
-  "short-name": "mostrar-original-com-contexto",
-  "started-at": "2026-11-25T21:45:00-03:00",
+  "feature-dir": "_reversa_forward/009-guardar-por-tema",
+  "feature-id": "009",
+  "short-name": "guardar-por-tema",
+  "started-at": "2026-11-25T23:55:00-03:00",
   "current-stage": "requirements",
   "stages-completed": [],
   "paused-features": []

@@ -33,6 +33,8 @@ export interface SimulatedProvider extends WhatsAppProvider {
   clearSent(): void;
   /** As próximas `count` chamadas de envio falham. */
   failNextSends(count: number): void;
+  /** Feature 009: entrega um áudio direto ao agente (gravado ou encaminhado) com o arquivo para `downloadMedia`. */
+  deliverAudio(message: Omit<IncomingDirect, "kind" | "media">, audio: { bytes: Uint8Array; seconds?: number }): Promise<void>;
   /** Feature 005: entrega um áudio de grupo com o arquivo disponível para `downloadMedia`. */
   deliverGroupAudio(message: Omit<IncomingGroupMessage, "kind" | "media">, audio: { bytes: Uint8Array; seconds?: number }): Promise<void>;
   /** Os próximos `count` downloads falham (`download_failed`). */
@@ -98,6 +100,12 @@ export function createSimulatedProvider(): SimulatedProvider {
     async deliverGroup(message) {
       if (!onGroup) throw new Error("nenhum listener de mensagem de grupo registrado");
       await onGroup(message);
+    },
+    async deliverAudio(message, audio) {
+      const fetchRef = `sim-${message.id}`;
+      media.set(fetchRef, audio.bytes);
+      const seconds = audio.seconds === undefined ? {} : { seconds: audio.seconds };
+      await provider.deliver({ ...message, kind: "audio", media: { mimeType: "audio/ogg; codecs=opus", sizeBytes: audio.bytes.length, fetchRef, ...seconds } });
     },
     async deliverGroupAudio(message, audio) {
       const fetchRef = `sim-${message.id}`;

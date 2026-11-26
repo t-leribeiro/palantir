@@ -306,6 +306,105 @@
         },
         "overrides": []
       }
+    },
+    {
+      "type": "timeseries",
+      "title": "Itens de pedidos de guardar por resultado",
+      "description": "saved: guardado; duplicate: já estava no tema; no_caption: foto, vídeo ou documento sem legenda; media_off: áudio sem armazenamento; nothing_pending: nada esperando; not_found: citação vencida; asked_theme: pediu o tema; failed: falha ao gravar. Nunca o tema nem o conteúdo.",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(agent_save_total[1h]))",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Encaminhados ao agente pelo que aconteceu",
+      "description": "noticed: abriu uma leva e recebeu o aviso; queued: entrou na leva; saved: guardado; untitled: guardado em 'sem tema'; discarded: descartado sem pedido em 10 min.",
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(agent_forwarded_total[1h]))",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Listagens de guardados por resultado",
+      "description": "listed: tema com itens; empty: tema sem itens; themes: lista de temas.",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(agent_saved_listing_total[1h]))",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "id": 12,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
     }
   ]
 }

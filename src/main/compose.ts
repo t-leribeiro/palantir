@@ -11,7 +11,14 @@ import {
   type WhatsAppObserver,
 } from "../channels/whatsapp/whatsapp-channel.js";
 import type { InboundHandler, IngestOutcome, OutboundMediaLoader } from "../contracts/channel/knowledge-channel.js";
-import { createAskQuestion, createDeterministicAnswerGenerator, createPgInboundReceipts, type UnknownSenderPolicy } from "../modules/agent/index.js";
+import {
+  createAskQuestion,
+  createDeterministicAnswerGenerator,
+  createOtelSaveObserver,
+  createPgInboundReceipts,
+  type SavedRouting,
+  type UnknownSenderPolicy,
+} from "../modules/agent/index.js";
 import { createPgIdentityRepository, createResolveUserByChannelAccount } from "../modules/identity/index.js";
 import { INDEX_QUEUE, createIngestMessage, createPgUnitOfWork } from "../modules/ingestion/index.js";
 import { createIndexMessage, createPgChunkRepository, type IndexRequest } from "../modules/knowledge/index.js";
@@ -34,13 +41,23 @@ import { createOtelMetrics, seconds, withSpan, type AppMetrics } from "../platfo
 import { newId } from "../shared/index.js";
 import { AGENT_NOTIFY_QUEUE_DEFINITIONS, SOURCE_DELETE_QUEUE_DEFINITION, buildAgentManagement, startDeletionWorker } from "./management.js";
 import { startDeletionNotices } from "./notify.js";
-import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, withMediaPreparation } from "./media.js";
+import { MEDIA_JOBS, MEDIA_QUEUE_DEFINITION, PURGE_OBJECT_QUEUE_DEFINITION, captureMediaKinds, startMediaWorker, startPurgeObjectWorker, withMediaPreparation } from "./media.js";
 import { buildSearchParts, startSemanticIndexing, tracedIndex, type SearchCompositionOptions } from "./search.js";
+import { buildSaved, type SavedObservers } from "./save-content.js";
 import { buildOutboundMedia, buildShowSource } from "./show-source.js";
+
+let sharedSavedObservers: SavedObservers | undefined;
+
+/** Métricas do guardar (feature 009, D-18): um observador por processo, os medidores são registrados uma vez. */
+function savedObservers(): SavedObservers {
+  sharedSavedObservers ??= createOtelSaveObserver();
+  return sharedSavedObservers;
+}
 
 export const QUEUES: readonly QueueDefinition[] = [
   { name: INDEX_QUEUE, retryLimit: 5, retryDelaySeconds: 2, expireInSeconds: 60, deadLetter: `${INDEX_QUEUE}.dead` },
   MEDIA_QUEUE_DEFINITION,
+  PURGE_OBJECT_QUEUE_DEFINITION,
   SOURCE_DELETE_QUEUE_DEFINITION,
   ...AGENT_NOTIFY_QUEUE_DEFINITIONS,
 ];
@@ -82,7 +99,7 @@ export interface ApiHandle {
  * Agente com identidade, busca e resposta determinística (ADR-0007); a política vem do canal. Desde a feature 006,
  * com verificação de conta, comandos de gestão e filtro por grupo na pergunta; desde a 008, com "mostra a N".
  */
-function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender: UnknownSenderPolicy, searchOptions?: SearchCompositionOptions) {
+function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender: UnknownSenderPolicy, searchOptions?: SearchCompositionOptions, saved?: SavedRouting) {
   const search = createSearchEvidence({
     index: tracedIndex(createPgSearchIndex(pool, { typoMinSimilarity: config.search.typoMinSimilarity, typo: config.search.typoSearch })),
     lowConfidenceThreshold: config.lowConfidenceThreshold,
@@ -98,16 +115,19 @@ function buildAsk(config: AppConfig, pool: Pool, queue: JobQueue, unknownSender:
     manage: management.manage,
     catalog: management.catalog,
     showSource: buildShowSource(pool),
+    ...(saved ? { saved } : {}),
   });
 }
 
 export async function buildApi(config: AppConfig, options: CompositionOptions = {}): Promise<ApiHandle> {
   const { pool, queue, logger, metrics } = await infra(config, options);
   const ingest = buildIngest(pool, queue);
-  const ask = buildAsk(config, pool, queue, "reply", options.search);
-
   const loadMedia = buildOutboundMedia(config, pool, "fake", logger);
   const channel = createFakeChannel({ onInvalid: () => metrics.channelInvalid("fake"), ...(loadMedia ? { loadMedia } : {}) });
+  // Feature 009: o guardar usa o fetchMedia deste canal para o áudio mandado ao agente.
+  const saved = await buildSaved(config, pool, queue, ingest, channel, logger, savedObservers());
+  const ask = buildAsk(config, pool, queue, "reply", options.search, saved.routing);
+
   channel.onMessage((message) => withSpan("ingestion.ingest", () => ingest(message).then(record(metrics, logger))));
   channel.onAgentMessage((message) =>
     withSpan("agent.ask", async () => {
@@ -129,6 +149,7 @@ export async function buildApi(config: AppConfig, options: CompositionOptions = 
   return {
     server,
     async close() {
+      saved.stop();
       await server.close();
       await channel.disconnect();
       await queue.stop();
@@ -181,6 +202,7 @@ export async function startWorker(config: AppConfig, options: CompositionOptions
   );
   const media = await startMediaWorker(config, pool, queue, logger, options.media ?? { observer: createOtelMediaObserver() });
   const deletions = await startDeletionWorker(config, pool, queue, logger);
+  await startPurgeObjectWorker(config, pool, queue, logger);
   logger.info({ queue: INDEX_QUEUE }, "worker pronto");
   return {
     async close() {
@@ -313,11 +335,13 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
   // A fila sempre existe no processo do WhatsApp: ingestão da captura e comandos de exclusão e aviso (D-10).
   const queue = createJobQueue(config.databaseUrl, QUEUES);
   await queue.start();
-  const ask = buildAsk(config, pool, queue, "silent", options.search);
   const log = { info: (m: string) => logger.info(m), warn: (m: string) => logger.warn(m), error: (m: string) => logger.error(m) };
   const mode = config.whatsapp.capture;
   const wiring = await wireCapture(config, pool, queue, metrics, logger);
   const channel = buildAgentChannel(options, mode, wiring, receipts, log, buildOutboundMedia(config, pool, "whatsapp", logger));
+  // Feature 009: o guardar baixa o áudio mandado ao agente pelo número do agente.
+  const saved = await buildSaved(config, pool, queue, buildIngest(pool, queue), channel, logger, savedObservers());
+  const ask = buildAsk(config, pool, queue, "silent", options.search, saved.routing);
   const captureChannel = mode === "dedicated" ? buildCaptureChannel(options, wiring, receipts, log) : undefined;
   channel.onAgentMessage(answerWith(ask, metrics, logger));
   const server = await buildHttpServer({
@@ -333,6 +357,7 @@ export async function buildWhatsApp(config: AppConfig, options: WhatsAppComposit
     captureChannel,
     server,
     async close() {
+      saved.stop();
       await channel.disconnect();
       await captureChannel?.disconnect();
       await server.close();

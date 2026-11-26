@@ -28,6 +28,19 @@ runChannelContractSuite("whatsapp (provedor simulado)", (options) => {
         seq += 1;
         await provider.deliver({ id: `CONTRACT-${seq}`, chatJid: JID, senderPhone: PHONE, kind: "text", text, sentAt: new Date() });
       },
+      async simulateDirect(input) {
+        const base = {
+          id: input.id,
+          chatJid: JID,
+          senderPhone: PHONE,
+          sentAt: new Date(),
+          ...(input.isForwarded ? { isForwarded: true } : {}),
+          ...(input.quotedId ? { quotedId: input.quotedId } : {}),
+        };
+        if (input.kind === "audio") return provider.deliverAudio(base, { bytes: input.audio ?? new Uint8Array([1]) });
+        if (input.kind === "image") return provider.deliver({ ...base, kind: "image", ...(input.caption ? { caption: input.caption } : {}) });
+        return provider.deliver({ ...base, kind: "text", ...(input.text ? { text: input.text } : {}) });
+      },
       async simulateDisconnect() {
         provider.setState("reconnecting");
         await channel.disconnect();

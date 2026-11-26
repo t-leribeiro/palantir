@@ -24,6 +24,8 @@ export interface CitedMessage {
   /** Texto da mensagem, com a legenda de mídia; vazio para áudio sem legenda. */
   readonly text: string;
   readonly audio?: SourceAudio;
+  /** Feature 009: a mensagem é um guardado; o tema dele (o cabeçalho diz "Guardado em <tema>", sem vizinhas). */
+  readonly savedTheme?: string;
 }
 
 /** Vizinha na mesma conversa. Para áudio, o texto é o da transcrição ativa (vazio sem transcrição). */

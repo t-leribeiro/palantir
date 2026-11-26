@@ -17,6 +17,17 @@ interface Row {
 }
 
 /**
+ * Título da citação (feature 009, D-11): o guardado aparece como "Guardados · <tema>", pelo item ligado à mensagem
+ * (um item por mensagem guardada); as outras fontes, pelo título da conversa.
+ */
+export const SOURCE_TITLE = `CASE WHEN s.kind = 'saved'
+         THEN concat_ws(' · ', 'Guardados', (SELECT th.name FROM evidence_references e
+                                              JOIN knowledge_items k ON k.id = e.knowledge_item_id
+                                              JOIN themes th ON th.id = k.theme_id
+                                             WHERE e.message_id = m.id LIMIT 1))
+         ELSE s.title END AS source_title`;
+
+/**
  * Busca textual em português (D-10). Cada termo da pergunta (sem stopwords nem palavras de pergunta)
  * entra como OU; o score é a fração dos termos presentes no trecho (0 a 1) e o ts_rank desempata.
  * O filtro de espaço está dentro da própria query (RN-05) e fontes em exclusão ficam de fora.
@@ -38,7 +49,7 @@ WITH terms AS (
 SELECT c.message_id, c.text,
        (SELECT count(*) FROM unnest(q.lexs) l WHERE c.tsv @@ to_tsquery('simple', quote_literal(l)))::float8
          / cardinality(q.lexs) AS score,
-       COALESCE(p.display_name, p.external_id) AS author, s.title AS source_title, m.sent_at, m.kind,
+       COALESCE(p.display_name, p.external_id) AS author, ${SOURCE_TITLE}, m.sent_at, m.kind,
        c.audio_start_s, c.audio_end_s, a.duration_s
   FROM q
   JOIN message_chunks c ON c.tsv @@ q.query
@@ -53,7 +64,7 @@ SELECT c.message_id, c.text,
  LIMIT $3`;
 
 /** Colunas e junções de citação, comuns às três formas de busca; o filtro do espaço fica em cada uma (RN-02). */
-const CITATION_COLUMNS = `COALESCE(p.display_name, p.external_id) AS author, s.title AS source_title, m.sent_at, m.kind,
+const CITATION_COLUMNS = `COALESCE(p.display_name, p.external_id) AS author, ${SOURCE_TITLE}, m.sent_at, m.kind,
        c.audio_start_s, c.audio_end_s, a.duration_s`;
 const CITATION_JOINS = `JOIN messages m ON m.id = c.message_id
   JOIN participants p ON p.id = m.participant_id

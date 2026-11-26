@@ -1,6 +1,6 @@
 // T013: funções puras do provedor real (D-06, D-14, D-16, D-17).
 import { describe, expect, it } from "vitest";
-import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, phoneFromJid, textOf } from "../../../src/channels/whatsapp/provider/mapping.js";
+import { backoffMs, captionOf, classifyContent, contextOf, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, phoneFromJid, textOf } from "../../../src/channels/whatsapp/provider/mapping.js";
 
 describe("phoneFromJid", () => {
   it("converte JID de número em E.164, inclusive com dispositivo e sem o nono dígito", () => {
@@ -101,5 +101,23 @@ describe("libraryErrorReason (diagnóstico sem conteúdo)", () => {
     expect(libraryErrorReason({ err: new Error("a".repeat(200)) })?.length).toBe(80);
     expect(libraryErrorReason({ key: {}, text: "mensagem secreta" })).toBeUndefined();
     expect(libraryErrorReason(null)).toBeUndefined();
+  });
+});
+
+describe("contextOf e captionOf (feature 009, D-02)", () => {
+  it("lê encaminhado e citada do contextInfo do tipo, inclusive no documento embrulhado", () => {
+    expect(contextOf({ extendedTextMessage: { text: "x", contextInfo: { isForwarded: true, stanzaId: "ABC" } } })).toEqual({ isForwarded: true, quotedId: "ABC" });
+    expect(contextOf({ documentWithCaptionMessage: { message: { documentMessage: { contextInfo: { isForwarded: true } } } } })).toEqual({ isForwarded: true });
+    expect(contextOf({ conversation: "oi" })).toEqual({ isForwarded: false });
+    expect(contextOf({ messageContextInfo: {}, imageMessage: { contextInfo: { stanzaId: "" } } })).toEqual({ isForwarded: false });
+    expect(contextOf(undefined)).toEqual({ isForwarded: false });
+  });
+
+  it("lê a legenda de foto, vídeo e documento; legenda em branco não conta", () => {
+    expect(captionOf({ imageMessage: { caption: "quadro" } })).toBe("quadro");
+    expect(captionOf({ videoMessage: { caption: "demo" } })).toBe("demo");
+    expect(captionOf({ documentWithCaptionMessage: { message: { documentMessage: { caption: "contrato" } } } })).toBe("contrato");
+    expect(captionOf({ imageMessage: { caption: "  " } })).toBeUndefined();
+    expect(captionOf({ audioMessage: { seconds: 3 } })).toBeUndefined();
   });
 });

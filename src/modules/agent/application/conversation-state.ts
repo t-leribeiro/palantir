@@ -4,7 +4,8 @@
 import type { ListItem } from "../domain/conversation-ref.js";
 
 export interface PendingAction {
-  readonly action: "follow" | "delete";
+  /** `forget` (feature 009): "esquece a N"; `ref` é o id da mensagem guardada e `title`, o tema. */
+  readonly action: "follow" | "delete" | "forget";
   readonly ref: string;
   readonly title: string;
 }

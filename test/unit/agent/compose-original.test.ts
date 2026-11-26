@@ -76,6 +76,13 @@ describe("mensagem de texto", () => {
     const alone = composeOriginal({ index: 1 }, { message: textMessage("oi"), before: [], after: [] });
     expect(alone.text).toBe("[1] Ana em T3, 12/11/2026 às 14:32:\n\noi");
   });
+
+  it("guardado (feature 009, D-11): o cabeçalho diz o tema e quando foi guardado, sem conversa em volta", () => {
+    const message = { ...textMessage("o Temporal resolveu"), author: "Você", sourceTitle: "Guardados · leituras", savedTheme: "leituras" };
+    const saved = composeOriginal({ index: 2 }, { message, before: [], after: [] });
+    expect(saved.text).toBe("[2] Guardado em leituras em 12/11/2026 às 14:32:\n\no Temporal resolveu");
+    expect(saved.citations[0]).toMatchObject({ author: "Você", sourceTitle: "Guardados · leituras" });
+  });
 });
 
 describe("áudio", () => {

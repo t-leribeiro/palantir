@@ -26,6 +26,18 @@ runChannelContractSuite("fake", (options) => {
       async simulateAgentMessage(text) {
         await channel.receiveAgentMessage({ senderAccountId: "fake-operator", text });
       },
+      async simulateDirect(input) {
+        await channel.receiveAgentMessage({
+          senderAccountId: "fake-operator",
+          messageId: input.id,
+          ...(input.kind ? { kind: input.kind } : {}),
+          ...(input.text ? { text: input.text } : {}),
+          ...(input.caption ? { caption: input.caption } : {}),
+          ...(input.isForwarded ? { isForwarded: true } : {}),
+          ...(input.quotedId ? { quotedMessageId: input.quotedId } : {}),
+          ...(input.audio ? { audio: input.audio } : {}),
+        });
+      },
       async simulateInboundAudio(bytes) {
         seq += 1;
         await channel.receiveInboundAudio({

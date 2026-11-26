@@ -6,18 +6,15 @@ export const HELP_TEXT = [
   "",
   "Experimente perguntar:",
   "• Quem recomendou o Temporal?",
-  "• O que falaram sobre Kafka?",
   "• Em qual áudio do T3 falaram de Temporal?",
   "",
-  '• Depois de uma resposta: "mostra a 2" abre a citação 2 inteira',
+  '• Depois de uma resposta: "mostra a 2" abre a citação 2',
+  '• Encaminhe uma mensagem e mande "guarda em leituras"; depois, "guardados leituras"',
   "",
   "Seus grupos:",
-  "• grupos: lista seus grupos e conversas (mais: próxima página)",
-  "• acompanhar 4: passa a guardar as mensagens novas do grupo 4",
-  "• parar T3: para de guardar; o histórico continua",
+  "• grupos: lista (mais: próxima página)",
+  "• acompanhar 4 / parar T3: liga e desliga a captura",
   "• apagar T3: apaga o grupo e tudo o que veio dele",
-  "",
-  "Por enquanto eu só entendo mensagens de texto.",
 ].join("\n");
 
 const HELP_WORDS = new Set(["oi", "ola", "bom dia", "boa tarde", "boa noite", "ajuda", "help", "menu", "?"]);
@@ -37,7 +34,7 @@ export const helpReply = (): AgentReply => ({ text: HELP_TEXT, outcome: "help", 
 
 export const TEXT_ONLY_TEXT = "Por enquanto eu só entendo mensagens de texto.";
 
-/** Áudio, imagem ou documento enviados ao agente (RF-06 da S2): áudios entram na S4. */
+/** Mídia enviada ao agente quando o guardar da S8 não está composto (RF-06 da S2). */
 export const textOnlyReply = (): AgentReply => ({ text: TEXT_ONLY_TEXT, outcome: "help", citations: [] });
 
 export function isTextual(kind: string): boolean {

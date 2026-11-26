@@ -10,7 +10,7 @@ import { buildWhatsApp, startWorker, type WhatsAppHandle, type WorkerHandle } fr
 import { runImport } from "../../src/main/import.js";
 import { seedOperator } from "../../src/main/seed-data.js";
 import { linkVerified } from "../support/link.js";
-import { HELP_TEXT, TEXT_ONLY_TEXT } from "../../src/modules/agent/index.js";
+import { HELP_TEXT, SAVE_TEXT } from "../../src/modules/agent/index.js";
 import { loadConfig } from "../../src/platform/config.js";
 import { createLogger } from "../../src/platform/logging/logger.js";
 import { startTestDatabase, type TestDatabase } from "../support/postgres.js";
@@ -94,9 +94,9 @@ describe("S2: perguntar pelo WhatsApp ao número do agente", () => {
     expect(await sendAndCollect(again)).toEqual([]);
   });
 
-  it("áudio recebe o aviso de que por enquanto só texto", async () => {
+  it("áudio espera o pedido de guardar (feature 009, RN-11): recebe o aviso de como guardar e nada é gravado", async () => {
     const { text: _text, ...audio } = message({ kind: "audio" });
-    expect(await sendAndCollect(audio)).toEqual([TEXT_ONLY_TEXT]);
+    expect(await sendAndCollect(audio)).toEqual([SAVE_TEXT.received]);
   });
 
   it("perguntas não viram conhecimento", async () => {

@@ -19,7 +19,7 @@ import makeWASocket, {
 } from "baileys";
 import { SessionFileError, type EncryptedFileStore } from "../session/encrypted-file-store.js";
 import { MediaUnavailableError } from "../../../contracts/channel/knowledge-channel.js";
-import { backoffMs, classifyContent, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, mediaInfoOf, phoneFromJid, textOf } from "./mapping.js";
+import { backoffMs, captionOf, classifyContent, contextOf, isGroupJid, isIgnoredJid, libraryErrorReason, lidFromJid, mediaInfoOf, phoneFromJid, textOf } from "./mapping.js";
 import type { GroupInfo, IncomingDirect, IncomingGroupMessage, IncomingMedia, SessionState, WhatsAppProvider } from "./provider.js";
 import { createRecentMedia } from "./recent-media.js";
 
@@ -238,7 +238,7 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
   async function toDirect(message: WAMessage): Promise<IncomingDirect | null> {
     const { key } = message;
     if (!key.remoteJid || key.fromMe || isIgnoredJid(key.remoteJid)) return null;
-    const { kind, text } = contentOf(message);
+    const { kind, text, content } = contentOf(message);
     if (kind === "ignore" || !key.id) return null;
     return {
       id: key.id,
@@ -248,7 +248,16 @@ export function createBaileysProvider(options: BaileysProviderOptions): WhatsApp
       ...(text ? { text } : {}),
       sentAt: timestampOf(message),
       ...(message.pushName ? { senderName: message.pushName } : {}),
+      ...directExtras(key.id, message, kind, content),
     };
+  }
+
+  /** Feature 009 (D-02): encaminhada, citada, legenda e o áudio anunciado para o guardar. */
+  function directExtras(id: string, message: WAMessage, kind: string, content: Record<string, unknown> | undefined): Partial<IncomingDirect> {
+    const { isForwarded, quotedId } = contextOf(content);
+    const caption = captionOf(content);
+    const media = kind === "audio" ? announceMedia(id, message, content) : undefined;
+    return { ...(isForwarded ? { isForwarded } : {}), ...(quotedId ? { quotedId } : {}), ...(caption ? { caption } : {}), ...(media ? { media } : {}) };
   }
 
   async function dispatch(message: WAMessage): Promise<void> {

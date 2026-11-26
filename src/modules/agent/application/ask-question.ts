@@ -9,6 +9,7 @@ import { questionScope, type CatalogEntry } from "../domain/question.js";
 import { parseShowSource } from "../domain/show-source.js";
 import type { CitationStore } from "./conversation-state.js";
 import type { ManageSources } from "./manage-sources.js";
+import { afterCommands, beforeCommands, holdIfContent, withUntitledNotice, type SavedRouting } from "./route-message.js";
 import type { ShowSource } from "./show-source.js";
 
 /** Porta de geração de resposta (ADR-0007). A feature do agente adiciona uma implementação com LLM. */
@@ -51,6 +52,8 @@ export interface AskQuestionDeps {
   readonly catalog?: (spaceId: string) => Promise<readonly CatalogEntry[]>;
   /** "mostra a N" (feature 008): onde ficam as citações da última resposta e o serviço que mostra a original. */
   readonly showSource?: { readonly citations: CitationStore; readonly show: ShowSource };
+  /** Guardar com tema, listar e esquecer (feature 009); sem eles, mídia recebe o "só texto" e encaminhado é pergunta. */
+  readonly saved?: SavedRouting;
 }
 
 type Sender =
@@ -85,28 +88,59 @@ export function createDeterministicAnswerGenerator(): AnswerGenerator {
   return { generate: async (_question, evidences) => composeAnswer(evidences) };
 }
 
+const textOf = (message: CanonicalMessage): string => message.text?.trim() ?? "";
+
 /** RF-13: identidade antes de qualquer ferramenta, resposta só com evidências e citações conferidas. */
 export function createAskQuestion(deps: AskQuestionDeps): AskQuestion {
   return async (message) => {
     const sender = await senderOf(deps, message.source.provider, message.sender.externalId);
     if (sender.kind === "unknown") return deps.unknownSender === "silent" ? null : notLinkedReply();
-    if (!isTextual(message.kind)) return textOnlyReply();
-    const question = message.text?.trim() ?? "";
-    if (sender.kind === "pending") return deps.accounts ? verificationReply(deps.accounts, sender.accountId, question) : null;
-    return answerActive(deps, { ...sender, provider: message.source.provider, accountId: message.sender.externalId }, question);
+    if (sender.kind === "pending") return pendingReply(deps, sender.accountId, message);
+    return activeReply(deps, { ...sender, provider: message.source.provider, accountId: message.sender.externalId }, message);
   };
+}
+
+/** Conta pendente: só o código vale; mídia sem o guardar da 009 recebe o "só texto", como antes. */
+function pendingReply(deps: AskQuestionDeps, accountId: string, message: CanonicalMessage): Promise<AgentReply> | AgentReply | null {
+  if (!isTextual(message.kind) && !deps.saved) return textOnlyReply();
+  return deps.accounts ? verificationReply(deps.accounts, accountId, isTextual(message.kind) ? textOf(message) : "") : null;
 }
 
 type ActiveContext = { readonly userId: string; readonly spaceId: string; readonly provider: string; readonly accountId: string };
 
-/** Conta ativa e verificada: comando de gestão, "mostra a N", ajuda ou pergunta, nessa ordem. */
-async function answerActive(deps: AskQuestionDeps, ctx: ActiveContext, question: string): Promise<AgentReply> {
+/** Conta ativa: o encaminhado e a mídia esperam o pedido de guardar (009); o texto segue a ordem dos passos. */
+async function activeReply(deps: AskQuestionDeps, ctx: ActiveContext, message: CanonicalMessage): Promise<AgentReply | null> {
+  const textual = isTextual(message.kind);
+  if (!deps.saved) return textual ? answerActive(deps, ctx, message) : textOnlyReply();
+  const held = holdIfContent(deps.saved, ctx, message, textual);
+  if (held !== undefined) return held;
+  return withUntitledNotice(deps.saved, ctx, await answerActive(deps, ctx, message));
+}
+
+type Step = (deps: AskQuestionDeps, ctx: ActiveContext, question: string, message: CanonicalMessage) => Promise<AgentReply | null> | AgentReply | null;
+
+/**
+ * A ordem do agente para texto de conta ativa (D-04 da 009): guardar e resposta de tema, comandos da S5, listagem
+ * e esquecer dos guardados, "mostra a N" e ajuda. O que nenhum passo trata é pergunta.
+ */
+const STEPS: readonly Step[] = [
+  (deps, ctx, question, message) => (deps.saved ? beforeCommands(deps.saved, ctx, message, question) : null),
+  async (deps, ctx, question) => (await deps.manage?.(ctx, question)) ?? null,
+  (deps, ctx, question) => (deps.saved ? afterCommands(deps.saved, ctx, question) : null),
+  (deps, ctx, question) => {
+    const index = deps.showSource ? parseShowSource(question) : null;
+    return index !== null && deps.showSource ? deps.showSource.show(ctx, index) : null;
+  },
+  (_deps, _ctx, question) => (isHelpRequest(question) ? helpReply() : null),
+];
+
+async function answerActive(deps: AskQuestionDeps, ctx: ActiveContext, message: CanonicalMessage): Promise<AgentReply> {
+  const question = textOf(message);
   if (question === "") return noEvidenceReply();
-  const managed = await deps.manage?.(ctx, question);
-  if (managed) return managed;
-  const index = deps.showSource ? parseShowSource(question) : null;
-  if (index !== null && deps.showSource) return deps.showSource.show(ctx, index);
-  if (isHelpRequest(question)) return helpReply();
+  for (const step of STEPS) {
+    const reply = await step(deps, ctx, question, message);
+    if (reply) return reply;
+  }
   const results = await searchInScope(deps, ctx.spaceId, question);
   if ("outcome" in results) return results;
   return remember(deps, ctx, await answerWithValidCitations(deps.generator, question, results));

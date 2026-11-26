@@ -15,7 +15,7 @@ import type {
 import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
 import { newId, systemClock, type Clock, type IdGenerator } from "../../shared/index.js";
-import { createGroupCapture, type CaptureObserver, type CapturePorts } from "./capture.js";
+import { audioAttachment, createGroupCapture, type CaptureObserver, type CapturePorts } from "./capture.js";
 import { createSendPacer, systemPacerClock, type PacerClock, type SendPacer } from "./pacer.js";
 import type { DirectKind, IncomingDirect, SessionState, WhatsAppProvider } from "./provider/provider.js";
 import { WHATSAPP_MAX_MESSAGE_LENGTH, renderForWhatsApp } from "./render.js";
@@ -104,6 +104,18 @@ const CONTRACT_KIND: Record<DirectKind, CanonicalMessage["kind"]> = {
   other: "document",
 };
 
+/** Texto da mensagem direta: o texto, ou a legenda de foto, vídeo e documento (feature 009, RN-11). */
+function directText(message: IncomingDirect): { text?: string } {
+  if (message.kind === "text") return message.text ? { text: message.text } : {};
+  return message.caption ? { text: message.caption.slice(0, 50_000) } : {};
+}
+
+/** Contrato 1.3.0: áudio exige anexo. Com a mídia anunciada (009), ele leva a referência para baixar. */
+function directAttachments(message: IncomingDirect) {
+  if (message.kind !== "audio") return [];
+  return [message.media ? audioAttachment(message.id, message.media) : { id: `${message.id}:0`, mimeType: "audio/ogg" }];
+}
+
 /** Destino de `sendReply`: JID pronto ou número em E.164. */
 export function toChatJid(destination: string): string {
   return destination.includes("@") ? destination : `${destination.replace(/\D/g, "")}@s.whatsapp.net`;
@@ -157,10 +169,11 @@ export function createWhatsAppChannel(options: WhatsAppChannelOptions): WhatsApp
       sender: { externalId: senderPhone, ...(message.senderName ? { displayName: message.senderName.slice(0, 200) } : {}) },
       timestamp: message.sentAt.toISOString(),
       kind: CONTRACT_KIND[message.kind],
-      ...(message.kind === "text" && message.text ? { text: message.text } : {}),
-      isForwarded: false,
-      // Contrato 1.3.0: áudio exige anexo. Ao agente, áudio ainda não é baixado (RN-09 da 005, S8 decide).
-      attachments: message.kind === "audio" ? [{ id: `${message.id}:0`, mimeType: "audio/ogg" }] : [],
+      ...directText(message),
+      // Feature 009 (D-02): encaminhada e citada; o áudio vai anunciado, e só é baixado se o dono pedir para guardar.
+      isForwarded: message.isForwarded === true,
+      ...(message.quotedId ? { quotedExternalMessageId: message.quotedId } : {}),
+      attachments: directAttachments(message),
       provenance: { captureMethod: "forwarded_to_agent", capturedAt: clock.now().toISOString(), adapter: WHATSAPP_ADAPTER },
     };
   }
