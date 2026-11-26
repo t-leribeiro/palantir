@@ -1,5 +1,6 @@
 export type SourceStatus = "not_authorized" | "authorized" | "revoked" | "deleting";
-export type SourceKind = "group" | "direct";
+/** `saved` (feature 009): a fonte Guardados do espaço, uma por espaço. */
+export type SourceKind = "group" | "direct" | "saved";
 
 export interface Source {
   readonly id: string;

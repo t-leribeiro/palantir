@@ -65,6 +65,32 @@ export function classifyContent(content: Content): DirectKind | "ignore" {
   return kind;
 }
 
+/** O objeto do tipo da mensagem; o documento com legenda vem embrulhado (`documentWithCaptionMessage.message`). */
+function typedOf(content: Content): Record<string, unknown> | undefined {
+  const type = Object.keys(content ?? {}).find((key) => !NOISE.has(key) && content?.[key] != null);
+  const value = type ? content?.[type] : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  if (type !== "documentWithCaptionMessage") return value as Record<string, unknown>;
+  const inner = (value as { message?: { documentMessage?: unknown } }).message?.documentMessage;
+  return inner && typeof inner === "object" ? (inner as Record<string, unknown>) : undefined;
+}
+
+/**
+ * Encaminhada e citada (feature 009, D-02), pelo `contextInfo` do tipo da mensagem. Texto puro (`conversation`)
+ * não tem `contextInfo`: chega como não encaminhado.
+ */
+export function contextOf(content: Content): { isForwarded: boolean; quotedId?: string } {
+  const info = typedOf(content)?.contextInfo as { isForwarded?: unknown; stanzaId?: unknown } | undefined;
+  const quotedId = typeof info?.stanzaId === "string" && info.stanzaId !== "" ? info.stanzaId : undefined;
+  return { isForwarded: info?.isForwarded === true, ...(quotedId ? { quotedId } : {}) };
+}
+
+/** Legenda de foto, vídeo ou documento (feature 009, RN-11), quando houver. */
+export function captionOf(content: Content): string | undefined {
+  const caption = typedOf(content)?.caption;
+  return typeof caption === "string" && caption.trim() !== "" ? caption : undefined;
+}
+
 /** Campos da mídia na mensagem (feature 005, D-18): MIME, duração e tamanho, sem baixar nada. */
 export function mediaInfoOf(content: Content): { mimeType: string; seconds?: number; sizeBytes?: number } | undefined {
   const type = Object.keys(content ?? {}).find((key) => !NOISE.has(key) && content?.[key] != null);

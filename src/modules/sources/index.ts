@@ -81,3 +81,12 @@ export { createPgDeletionStore } from "./infrastructure/pg-deletion-store.js";
 export { createPgDeletionNotices, type ClaimedNotice, type DeletionNotices } from "./infrastructure/pg-deletion-notices.js";
 export { createOtelManagementObserver, type ManagementObserver } from "./infrastructure/otel-management-observer.js";
 export { completedDeletion, deletionsInProgress } from "./infrastructure/pg-deletion-stats.js";
+export {
+  SAVED_CONVERSATION_ID,
+  SAVED_SOURCE_TITLE,
+  createEnsureSavedSource,
+  type EnsureSavedSource,
+  type SavedSourceRef,
+  type SavedSourceRepository,
+} from "./application/ensure-saved-source.js";
+export { createPgSavedSourceRepository } from "./infrastructure/pg-saved-source-repository.js";

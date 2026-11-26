@@ -50,7 +50,9 @@ const snippet = (text: string, max = SNIPPET_CHARS) => (text.length > max ? `${t
 function header(index: number, m: CitedMessage): string {
   const duration = m.audio?.durationSeconds;
   const audio = m.kind === "audio" && duration !== null && duration !== undefined ? `, áudio de ${formatClock(duration)}` : "";
-  return `[${index}] ${m.author} em ${m.sourceTitle}, ${DATE.format(m.sentAt)} às ${TIME.format(m.sentAt)}${audio}:`;
+  const when = `${DATE.format(m.sentAt)} às ${TIME.format(m.sentAt)}`;
+  if (m.savedTheme !== undefined) return `[${index}] Guardado em ${m.savedTheme} em ${when}${audio}:`;
+  return `[${index}] ${m.author} em ${m.sourceTitle}, ${when}${audio}:`;
 }
 
 /** Hora da vizinha; com a data quando ela é de outro dia que a citada. */

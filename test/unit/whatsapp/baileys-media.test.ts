@@ -4,7 +4,7 @@ import type * as Baileys from "baileys";
 import { describe, expect, it, vi } from "vitest";
 import { MediaUnavailableError } from "../../../src/contracts/channel/knowledge-channel.js";
 import { mediaInfoOf } from "../../../src/channels/whatsapp/provider/mapping.js";
-import type { IncomingGroupMessage } from "../../../src/channels/whatsapp/provider/provider.js";
+import type { IncomingDirect, IncomingGroupMessage } from "../../../src/channels/whatsapp/provider/provider.js";
 import { createRecentMedia } from "../../../src/channels/whatsapp/provider/recent-media.js";
 import type { EncryptedFileStore } from "../../../src/channels/whatsapp/session/encrypted-file-store.js";
 
@@ -140,5 +140,58 @@ describe("createRecentMedia", () => {
     now = 1500;
     expect(recent.take("a")).toBe("A2");
     expect(recent.take("b")).toBeUndefined();
+  });
+});
+
+describe("provedor Baileys: mensagem direta (feature 009, D-02)", () => {
+  const DIRECT = "5511999990000@s.whatsapp.net";
+  const direct = (id: string, message: Record<string, unknown>) => ({
+    key: { remoteJid: DIRECT, id, fromMe: false },
+    message,
+    messageTimestamp: 1_795_000_000,
+    pushName: "Dono",
+  });
+
+  async function startedDirect() {
+    const provider = createBaileysProvider({ store, log });
+    const received: IncomingDirect[] = [];
+    provider.onDirectMessage(async (m) => void received.push(m));
+    await provider.start();
+    const socket = sockets.at(-1) as FakeSocket;
+    const upsert = async (messages: unknown[]) => {
+      socket.ev.emit("messages.upsert", { messages, type: "notify" });
+      await vi.waitFor(() => undefined);
+      await new Promise((resolve) => setImmediate(resolve));
+    };
+    return { provider, received, upsert };
+  }
+
+  it("marca o encaminhado e a citada pelo contextInfo; texto puro chega como não encaminhado", async () => {
+    const { received, upsert } = await startedDirect();
+    await upsert([
+      direct("F1", { extendedTextMessage: { text: "recomendo o Temporal", contextInfo: { isForwarded: true, forwardingScore: 1 } } }),
+      direct("Q1", { extendedTextMessage: { text: "guarda em decisões", contextInfo: { stanzaId: "F1", quotedMessage: { conversation: "x" } } } }),
+      direct("P1", { conversation: "oi" }),
+    ]);
+    expect(received[0]).toMatchObject({ id: "F1", kind: "text", text: "recomendo o Temporal", isForwarded: true });
+    expect(received[1]).toMatchObject({ id: "Q1", quotedId: "F1" });
+    expect(received[1]).not.toHaveProperty("isForwarded");
+    expect(received[2]).not.toHaveProperty("isForwarded");
+  });
+
+  it("anuncia o áudio direto para o guardar, sem baixar, e lê a legenda de foto e documento", async () => {
+    download.calls.length = 0;
+    const { provider, received, upsert } = await startedDirect();
+    await upsert([
+      direct("A9", { audioMessage: { mimetype: "audio/ogg; codecs=opus", seconds: 42, fileLength: 6800, ptt: true, contextInfo: { isForwarded: true } } }),
+      direct("I1", { imageMessage: { mimetype: "image/jpeg", caption: "quadro da reunião" } }),
+      direct("D1", { documentWithCaptionMessage: { message: { documentMessage: { mimetype: "application/pdf", caption: "contrato", contextInfo: { isForwarded: true } } } } }),
+    ]);
+    expect(received[0]).toMatchObject({ kind: "audio", isForwarded: true, media: { seconds: 42, sizeBytes: 6800, fetchRef: "A9" } });
+    expect(download.calls).toHaveLength(0);
+    expect(received[1]).toMatchObject({ kind: "image", caption: "quadro da reunião" });
+    expect(received[1]).not.toHaveProperty("media");
+    expect(received[2]).toMatchObject({ kind: "document", caption: "contrato", isForwarded: true });
+    expect(Buffer.from(await provider.downloadMedia("A9")).toString()).toBe("OggS-bytes");
   });
 });

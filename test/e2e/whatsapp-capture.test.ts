@@ -81,7 +81,7 @@ beforeAll(async () => {
   db = await startTestDatabase();
   tmp = await mkdtemp(join(tmpdir(), "palantir-s3-"));
   await seedOperator(db.pool);
-  const config = loadConfig({ DATABASE_URL: db.url, LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "agent" });
+  const config = loadConfig({ DATABASE_URL: db.url, PALANTIR_WHATSAPP_BURST_MS: "0", LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "agent" });
   worker = await startWorker(config, { metrics });
   await runImport({ file: sample, conversation: "Grupo de teste", timeZone: "America/Sao_Paulo", owner: OWNER }, db.pool, db.url);
   await linkVerified({ number: "+55 11 98888-7777", owner: OWNER }, db.pool);
@@ -196,7 +196,7 @@ describe("S3: captura ao vivo de um grupo de teste autorizado", () => {
 
 describe("S3: modo de dois números (dedicated)", () => {
   it("o número de captura não responde a mensagens diretas e tem o próprio estado no health", async () => {
-    const config = loadConfig({ DATABASE_URL: db.url, LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "dedicated" });
+    const config = loadConfig({ DATABASE_URL: db.url, PALANTIR_WHATSAPP_BURST_MS: "0", LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "dedicated" });
     const agent = createSimulatedProvider();
     const capture = createSimulatedProvider();
     const handle = await buildWhatsApp(config, { provider: agent, captureProvider: capture, metrics, logger });
@@ -213,7 +213,7 @@ describe("S3: modo de dois números (dedicated)", () => {
   });
 
   it("sem o provedor de captura, a composição recusa com mensagem clara", async () => {
-    const config = loadConfig({ DATABASE_URL: db.url, LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "dedicated" });
+    const config = loadConfig({ DATABASE_URL: db.url, PALANTIR_WHATSAPP_BURST_MS: "0", LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "dedicated" });
     await expect(buildWhatsApp(config, { provider: createSimulatedProvider(), metrics, logger })).rejects.toThrow(/dedicated exige o provedor/);
   });
 });

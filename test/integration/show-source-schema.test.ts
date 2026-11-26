@@ -1,4 +1,5 @@
 // T001 (feature 008): migração 0010 com PostgreSQL real (data-delta.md §1).
+// A 0010 deixou de ser a última (feature 009): desfaz e refaz também a 0011.
 import { runner } from "node-pg-migrate";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedOperator } from "../../src/main/seed-data.js";
@@ -9,7 +10,7 @@ let db: TestDatabase;
 let userId: string;
 
 const step = (direction: "up" | "down") =>
-  runner({ databaseUrl: db.url, dir: MIGRATIONS_DIR, direction, count: 1, migrationsTable: "pgmigrations", singleTransaction: true, log: () => undefined });
+  runner({ databaseUrl: db.url, dir: MIGRATIONS_DIR, direction, count: 2, migrationsTable: "pgmigrations", singleTransaction: true, log: () => undefined });
 
 const columns = async () =>
   (

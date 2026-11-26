@@ -3,6 +3,7 @@
 // A posição da citada é lida no próprio SQL: o Date do JavaScript corta os microssegundos de created_at.
 import type { Queryable } from "../../../platform/db/index.js";
 import type { CitedMessage, ContextMessage, SourceAudio, SourceContext, SourceContextResult } from "../application/source-context.js";
+import { SOURCE_TITLE } from "./pg-search-index.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -16,7 +17,9 @@ const AUDIO_JOIN = `
 
 const TARGET = `
 SELECT m.id, m.source_id, m.sent_at, m.kind, COALESCE(m.text, '') AS text,
-       COALESCE(p.display_name, p.external_id) AS author, s.title AS source_title, s.status AS source_status,
+       COALESCE(p.display_name, p.external_id) AS author, ${SOURCE_TITLE}, s.status AS source_status, s.kind AS source_kind,
+       (SELECT th.name FROM evidence_references e JOIN knowledge_items k ON k.id = e.knowledge_item_id
+          JOIN themes th ON th.id = k.theme_id WHERE e.message_id = m.id LIMIT 1) AS saved_theme,
        a.id AS attachment_id, a.mime_type, a.size_bytes, a.duration_s, a.storage_status, a.processing_status, t.id AS transcript_id
   FROM messages m
   JOIN participants p ON p.id = m.participant_id
@@ -47,6 +50,8 @@ interface TargetRow {
   author: string;
   source_title: string;
   source_status: string;
+  source_kind: string;
+  saved_theme: string | null;
   attachment_id: string | null;
   mime_type: string | null;
   size_bytes: string | number | null;
@@ -97,6 +102,7 @@ export function createPgSourceContext(db: Queryable): SourceContext {
       kind: row.kind,
       text: row.text,
       ...(audio ? { audio } : {}),
+      ...(row.source_kind === "saved" ? { savedTheme: row.saved_theme ?? "" } : {}),
     };
   }
 
@@ -111,7 +117,9 @@ export function createPgSourceContext(db: Queryable): SourceContext {
       const row = (await db.query<TargetRow>(TARGET, [messageId, spaceId])).rows[0];
       if (!row) return { status: "not_found" };
       if (row.source_status === "deleting") return { status: "deleted" };
-      const [target, before, after] = await Promise.all([message(row), neighbors(BEFORE, spaceId, row, k), neighbors(AFTER, spaceId, row, k)]);
+      // Feature 009 (D-11): as vizinhas na fonte Guardados não têm relação entre si.
+      const around = row.source_kind === "saved" ? 0 : k;
+      const [target, before, after] = await Promise.all([message(row), neighbors(BEFORE, spaceId, row, around), neighbors(AFTER, spaceId, row, around)]);
       return { status: "found", message: target, before: before.reverse(), after };
     },
   };

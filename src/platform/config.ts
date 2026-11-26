@@ -13,6 +13,11 @@ export interface WhatsAppConfig {
   readonly healthPort: number;
   /** Captura de grupos (feature 004, D-01): `agent` usa o número do agente; `dedicated`, um segundo número. */
   readonly capture: CaptureMode;
+  /**
+   * Feature 009 (demonstração de 2026-11-26): textos do dono que chegam juntos, até esta distância pela hora da
+   * mensagem, são uma leva encaminhada e esperam o "guarda em". `0` desliga.
+   */
+  readonly burstMs: number;
 }
 
 export const CAPTURE_MODES = ["off", "agent", "dedicated"] as const;
@@ -263,6 +268,7 @@ function whatsappConfig(env: Env, problems: string[]): WhatsAppConfig {
     sessionDir: env.PALANTIR_WA_SESSION_DIR || join(homedir(), ".palantir", "whatsapp"),
     healthPort: integer(env.PALANTIR_WHATSAPP_HEALTH_PORT ?? "8081", "PALANTIR_WHATSAPP_HEALTH_PORT", 1, 65535, problems),
     capture: oneOf(env.PALANTIR_WHATSAPP_CAPTURE || "off", CAPTURE_MODES, "PALANTIR_WHATSAPP_CAPTURE", problems),
+    burstMs: integer(env.PALANTIR_WHATSAPP_BURST_MS ?? "2000", "PALANTIR_WHATSAPP_BURST_MS", 0, 10_000, problems),
   };
 }
 

@@ -4,6 +4,9 @@ import type { CanonicalMessage, InboundHandler, KnowledgeChannel } from "../cont
 import {
   MEDIA_QUEUE,
   NOOP_MEDIA_OBSERVER,
+  PURGE_OBJECT_QUEUE,
+  createPurgeObject,
+  type PurgeObjectJob,
   createAudioProcessor,
   createFakeTranscriber,
   createOpenAiCompatibleTranscriber,
@@ -42,6 +45,37 @@ export const MEDIA_QUEUE_DEFINITION: QueueDefinition = {
   expireInSeconds: 600,
   deadLetter: `${MEDIA_QUEUE}.dead`,
 };
+
+/** Purga de um arquivo esquecido (feature 009, D-13): tentativas por cerca de 5 h se o armazenamento cair. */
+export const PURGE_OBJECT_QUEUE_DEFINITION: QueueDefinition = {
+  name: PURGE_OBJECT_QUEUE,
+  retryLimit: 10,
+  retryDelaySeconds: 30,
+  expireInSeconds: 120,
+  deadLetter: `${PURGE_OBJECT_QUEUE}.dead`,
+};
+
+/**
+ * Worker de `media.purge_object` (feature 009). Sem armazenamento configurado, não assina: nada foi guardado sem ele,
+ * e os jobs esperam na fila. O log leva só o resultado, nunca a chave (ela tem o SHA-256 do conteúdo).
+ */
+export async function startPurgeObjectWorker(config: AppConfig, pool: Pool, queue: JobQueue, logger: Logger): Promise<void> {
+  let store: S3ObjectStore;
+  try {
+    store = buildObjectStore(config.media);
+  } catch (error) {
+    logger.warn({ reason: (error as Error).name }, "purga de mídia desligada: armazenamento não configurado");
+    return;
+  }
+  const isReferenced = async (key: string) => (await pool.query("SELECT 1 FROM attachments WHERE storage_key = $1 LIMIT 1", [key])).rows.length > 0;
+  const purge = createPurgeObject({ store, isReferenced });
+  await queue.work<PurgeObjectJob>(PURGE_OBJECT_QUEUE, (job) =>
+    withSpan("media.purge_object", async () => {
+      const outcome = await purge(job);
+      logger.info({ outcome }, "purga de arquivo de mídia");
+    }),
+  );
+}
 
 export const MEDIA_JOBS: MediaJobsOptions = {
   mediaQueue: MEDIA_QUEUE,
@@ -125,18 +159,27 @@ export async function withMediaPreparation(
   logger: Logger,
   observer?: PrepareObserver,
 ): Promise<((ingest: InboundHandler, channel: Pick<KnowledgeChannel, "fetchMedia">) => InboundHandler) | undefined> {
+  const prepare = await buildMediaPrepare(config, pool, logger, "captura", observer);
+  if (!prepare) return undefined;
+  return (ingest, channel) => async (message: CanonicalMessage) =>
+    ingest(await withSpan("media.prepare", () => prepare(message, (ref) => channel.fetchMedia(ref))));
+}
+
+/**
+ * Preparo dos anexos (baixar, conferir e guardar cifrado) quando há mídia configurada; `undefined` quando não há
+ * (nenhum tipo guardado, chave ou armazenamento ausentes), com o aviso no log. Usado pela captura e pelo guardar (009).
+ */
+export async function buildMediaPrepare(config: AppConfig, pool: Pool, logger: Logger, use: "captura" | "guardar", observer?: PrepareObserver): Promise<PrepareAttachments | undefined> {
   if (captureMediaKinds(config.media).length === 0) return undefined;
   let store: S3ObjectStore;
   try {
     store = buildObjectStore(config.media);
     await store.ensureBucket();
   } catch (error) {
-    logger.warn({ reason: (error as Error).name }, "mídia desligada na captura: armazenamento indisponível; os áudios serão contados e descartados");
+    logger.warn({ reason: (error as Error).name, use }, "mídia desligada: armazenamento indisponível; os áudios não serão guardados");
     return undefined;
   }
-  const prepare = buildPrepare(pool, store, config.media, observer);
-  return (ingest, channel) => async (message: CanonicalMessage) =>
-    ingest(await withSpan("media.prepare", () => prepare(message, (ref) => channel.fetchMedia(ref))));
+  return buildPrepare(pool, store, config.media, observer);
 }
 
 export interface MediaWorkerHandle {

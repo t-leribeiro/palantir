@@ -16,6 +16,14 @@ export interface IncomingDirect {
   readonly text?: string;
   readonly sentAt: Date;
   readonly senderName?: string;
+  /** Encaminhada (feature 009, D-02). */
+  readonly isForwarded?: boolean;
+  /** Id da mensagem citada pelo "responder" do WhatsApp. */
+  readonly quotedId?: string;
+  /** Legenda de foto, vídeo ou documento. */
+  readonly caption?: string;
+  /** Áudio anunciado, como na captura de grupos: só é baixado se o dono pedir para guardar. */
+  readonly media?: IncomingMedia;
 }
 
 /** Mensagem de grupo (feature 004, D-03, D-11): só com captura ligada, já filtrada (sem `fromMe`, reação, edição). */

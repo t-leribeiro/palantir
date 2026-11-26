@@ -44,7 +44,25 @@ export interface FakeInboundAudio extends Omit<FakeInbound, "text"> {
 
 export interface FakeAgentMessage {
   readonly senderAccountId: string;
-  readonly text: string;
+  /** Obrigatório para `kind: "text"` (o padrão). */
+  readonly text?: string;
+  /** Feature 009: id externo (gerado quando ausente), tipo, encaminhada, citada, legenda e áudio. */
+  readonly messageId?: string;
+  readonly kind?: "text" | "audio" | "image" | "document";
+  readonly isForwarded?: boolean;
+  readonly quotedMessageId?: string;
+  readonly caption?: string;
+  /** Bytes do áudio, servidos pelo `fetchMedia` (pelo HTTP, `audioBase64`). */
+  readonly audio?: Uint8Array;
+  readonly durationSeconds?: number;
+}
+
+/** Corpo HTTP da mensagem ao agente: o áudio vem em base64. */
+export type FakeAgentRequest = Omit<FakeAgentMessage, "audio"> & { readonly audioBase64?: string };
+
+export function fromAgentRequest(body: FakeAgentRequest): FakeAgentMessage {
+  const { audioBase64, ...rest } = body;
+  return audioBase64 ? { ...rest, audio: new Uint8Array(Buffer.from(audioBase64, "base64")) } : rest;
 }
 
 /** Anexo da resposta como o canal de teste o entregou (feature 008): `sent`, ou o texto de falha no lugar. */
@@ -152,6 +170,24 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
     };
   }
 
+  /** Feature 009: tipo, texto ou legenda, encaminhada, citada e o anexo do áudio (servido pelo `fetchMedia`). */
+  function agentExtras(base: Record<string, unknown>, input: FakeAgentMessage, externalMessageId: string): Record<string, unknown> {
+    const { text: _text, ...rest } = base;
+    const kind = input.kind ?? "text";
+    const text = kind === "text" ? input.text : input.caption;
+    const quoted = input.quotedMessageId ? { quotedExternalMessageId: input.quotedMessageId } : {};
+    return { ...rest, kind, ...(text ? { text } : {}), isForwarded: input.isForwarded === true, ...quoted, attachments: audioOf(input, externalMessageId) };
+  }
+
+  function audioOf(input: FakeAgentMessage, externalMessageId: string): readonly Record<string, unknown>[] {
+    if (input.kind !== "audio") return [];
+    const fetchRef = `fake-media:${externalMessageId}`;
+    const mimeType = "audio/ogg; codecs=opus";
+    if (input.audio) media.set(fetchRef, { bytes: input.audio, mimeType });
+    const duration = input.durationSeconds === undefined ? {} : { durationSeconds: input.durationSeconds };
+    return [{ id: `${externalMessageId}:0`, mimeType, ...(input.audio ? { sizeBytes: input.audio.length, fetchRef } : {}), ...duration }];
+  }
+
   function requireConnected<T>(handler: T | undefined): T {
     if (!connected) throw new NotConnectedError();
     if (!handler) throw new Error("Nenhum handler registrado no adaptador fake.");
@@ -228,14 +264,17 @@ export function createFakeChannel(options: FakeChannelOptions = {}): FakeChannel
     },
     async receiveAgentMessage(input) {
       const handler = requireConnected(onAgent);
-      const message = build({
+      const externalMessageId = input.messageId ?? ids();
+      const base = build({
         accountId: input.senderAccountId,
         conversationId: `agent:${input.senderAccountId}`,
+        externalMessageId,
         senderId: input.senderAccountId,
-        text: input.text,
+        text: input.text ?? "",
         timestamp: clock.now().toISOString(),
         captureMethod: "forwarded_to_agent",
-      });
+      }) as Record<string, unknown>;
+      const message = agentExtras(base, input, externalMessageId);
       const valid = validateCanonicalMessage(message);
       if (!valid.ok) throw new Error(`Mensagem ao agente inválida: ${valid.error.details.map((d) => d.path).join(", ")}`);
       const reply = await handler(valid.value);

@@ -120,6 +120,22 @@ describe("createWhatsAppChannel", () => {
     expect(validateCanonicalMessage(asked[0])).toMatchObject({ ok: true });
   });
 
+  it("feature 009: encaminhada e citada chegam marcadas; a legenda vira o texto; o áudio vem com a referência", async () => {
+    const { provider, channel, asked } = await setup();
+    await provider.deliver(direct({ id: "FW-1", text: "recomendo o Temporal", isForwarded: true }));
+    await provider.deliver(direct({ text: "guarda em decisões", quotedId: "FW-1" }));
+    const { text: _t, ...photo } = direct({ kind: "image", caption: "quadro da reunião" });
+    await provider.deliver(photo);
+    const { text: _a, ...audio } = direct({ id: "AU-1", isForwarded: true });
+    await provider.deliverAudio(audio, { bytes: new Uint8Array([1, 2, 3]), seconds: 7 });
+    expect(asked[0]).toMatchObject({ isForwarded: true, text: "recomendo o Temporal" });
+    expect(asked[1]).toMatchObject({ isForwarded: false, quotedExternalMessageId: "FW-1" });
+    expect(asked[2]).toMatchObject({ kind: "image", text: "quadro da reunião", attachments: [] });
+    expect(asked[3]).toMatchObject({ kind: "audio", isForwarded: true, attachments: [{ id: "AU-1:0", fetchRef: "sim-AU-1", sizeBytes: 3, durationSeconds: 7 }] });
+    for (const m of asked) expect(validateCanonicalMessage(m)).toMatchObject({ ok: true });
+    expect((await channel.fetchMedia("sim-AU-1")).bytes).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
   it("divide resposta longa em partes, em ordem", async () => {
     const lines = Array.from({ length: 3 }, (_, i) => `${i + 1}. ${"x".repeat(3000)}`).join("\n");
     const { provider } = await setup(async () => ({ text: lines, outcome: "no_evidence", citations: [] }));

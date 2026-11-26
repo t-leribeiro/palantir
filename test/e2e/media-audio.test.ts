@@ -84,6 +84,7 @@ beforeAll(async () => {
   tmp = await mkdtemp(join(tmpdir(), "palantir-s4-"));
   await seedOperator(db.pool);
   config = loadConfig({
+    PALANTIR_WHATSAPP_BURST_MS: "0",
     DATABASE_URL: db.url,
     LOG_LEVEL: "debug",
     PALANTIR_WHATSAPP_CAPTURE: "agent",

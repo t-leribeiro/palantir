@@ -9,10 +9,13 @@ export type AuditAction =
   | "capture.authorized"
   | "capture.revoked"
   | "source.deletion_requested"
-  | "source.deleted";
+  | "source.deleted"
+  /** Feature 009 (D-17): guardar e esquecer um item, com o id do item como alvo e sem tema nem conteúdo. */
+  | "knowledge.item_saved"
+  | "knowledge.item_forgotten";
 
 export type AuditChannel = "whatsapp" | "fake" | "cli";
-export type AuditTargetKind = "channel_account" | "source";
+export type AuditTargetKind = "channel_account" | "source" | "knowledge_item";
 
 export interface AuditEvent {
   /** `null` para ações do sistema (ex.: conclusão da exclusão). */

@@ -2,7 +2,7 @@
 import { normalizeText } from "./command.js";
 
 /** Estado de cada item da lista, do ponto de vista de quem pergunta. */
-export type ItemState = "following" | "stopped" | "not_following" | "imported" | "conversation" | "other_account";
+export type ItemState = "following" | "stopped" | "not_following" | "imported" | "conversation" | "other_account" | "saved";
 
 export interface ListItem {
   /** `source:<uuid>` ou `group:<id do grupo>`. */
@@ -27,6 +27,7 @@ const LABELS: Record<ItemState, string> = {
   imported: "importada",
   conversation: "conversa",
   other_account: "acompanhado por outra conta",
+  saved: "seus itens guardados",
 };
 
 export const stateLabel = (state: ItemState): string => LABELS[state];

@@ -30,6 +30,19 @@ export interface ChannelDriver {
   failNextDownloads?(count: number): void;
   /** Feature 008: anexos que o provedor recebeu do adaptador, na ordem (canais com mídia). */
   deliveredMedia?(): readonly { destinationAccountId: string; sizeBytes: number; sha256: string }[];
+  /** Feature 009: o dono escrevendo ao agente com encaminhada, citação, legenda ou áudio. */
+  simulateDirect?(input: DirectInput): Promise<void>;
+}
+
+/** Mensagem do dono ao agente na suíte (feature 009, interfaces/canal-encaminhado.md §1). */
+export interface DirectInput {
+  readonly id: string;
+  readonly kind?: "text" | "image" | "audio";
+  readonly text?: string;
+  readonly caption?: string;
+  readonly isForwarded?: boolean;
+  readonly quotedId?: string;
+  readonly audio?: Uint8Array;
 }
 
 /** Opções de construção do adaptador na suíte (feature 008: o loader do anexo da resposta). */
@@ -192,6 +205,45 @@ export function runChannelContractSuite(name: string, create: (options?: Harness
       expect(allText(driver)).toContain("Não consegui mandar o arquivo do áudio agora.");
       await channel.sendReply(destination, { text: "sem anexo", outcome: "no_evidence", citations: [] });
       expect(driver.deliveredMedia?.()).toEqual([]);
+    });
+
+    it("encaminhado (009): chega marcado e válido; a mensagem digitada chega sem a marca", async (ctx) => {
+      const { driver, toAgent } = await connected();
+      if (!driver.simulateDirect) ctx.skip();
+      await driver.simulateDirect?.({ id: "fw-1", text: "recomendo o Temporal", isForwarded: true });
+      await driver.simulateDirect?.({ id: "typed-1", text: "digitado" });
+      expect(toAgent.map((m) => [m.text, m.isForwarded])).toEqual([["recomendo o Temporal", true], ["digitado", false]]);
+      expect(toAgent[1]).not.toHaveProperty("quotedExternalMessageId");
+      for (const m of toAgent) expect(validateCanonicalMessage(m).ok).toBe(true);
+    });
+
+    it("citação (009): a resposta citando traz o id da mensagem citada", async (ctx) => {
+      const { driver, toAgent } = await connected();
+      if (!driver.simulateDirect) ctx.skip();
+      await driver.simulateDirect?.({ id: "fw-2", text: "algo", isForwarded: true });
+      await driver.simulateDirect?.({ id: "cmd-2", text: "guarda em decisões", quotedId: "fw-2" });
+      expect(toAgent[1]?.quotedExternalMessageId).toBe(toAgent[0]?.source.externalMessageId);
+    });
+
+    it("legenda (009): foto com legenda chega como image com o texto e sem anexo", async (ctx) => {
+      const { driver, toAgent } = await connected();
+      if (!driver.simulateDirect) ctx.skip();
+      await driver.simulateDirect?.({ id: "img-1", kind: "image", caption: "quadro da reunião", isForwarded: true });
+      expect(toAgent[0]).toMatchObject({ kind: "image", text: "quadro da reunião", attachments: [] });
+      expect(validateCanonicalMessage(toAgent[0]).ok).toBe(true);
+    });
+
+    it("áudio ao agente (009): chega com fetchRef e os bytes vêm pelo fetchMedia", async (ctx) => {
+      const { channel, driver, toAgent } = await connected();
+      if (!driver.simulateDirect || !channel.capabilities().supportsMedia) ctx.skip();
+      const bytes = new Uint8Array([79, 103, 103, 83, 9]);
+      await driver.simulateDirect?.({ id: "au-1", kind: "audio", audio: bytes, isForwarded: true });
+      const attachment = toAgent[0]?.attachments[0];
+      expect(toAgent[0]?.kind).toBe("audio");
+      expect(attachment?.fetchRef).toBeTruthy();
+      expect(validateCanonicalMessage(toAgent[0]).ok).toBe(true);
+      const fetched = await channel.fetchMedia(attachment?.fetchRef ?? "");
+      expect(createHash("sha256").update(fetched.bytes).digest("hex")).toBe(createHash("sha256").update(bytes).digest("hex"));
     });
 
     it("volta a entregar mensagens depois de reconectar", async () => {

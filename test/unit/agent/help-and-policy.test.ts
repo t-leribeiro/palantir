@@ -60,6 +60,12 @@ describe("ajuda (RF-14)", () => {
     expect(HELP_TEXT.match(/\?/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
+  it("a ajuda ensina a guardar e a listar (feature 009, D-19) e não diz mais que só entende texto", () => {
+    expect(HELP_TEXT).toContain('"guarda em leituras"');
+    expect(HELP_TEXT).toContain('"guardados leituras"');
+    expect(HELP_TEXT).not.toContain("só entendo");
+  });
+
   it("remetente desconhecido não recebe a ajuda", async () => {
     const { handler } = setup({ linked: false, unknownSender: "silent" });
     expect(await handler(ask("oi"))).toBeNull();

@@ -11,6 +11,7 @@ import type {
 import { normalizeText, parseCommand, type AgentCommand } from "../domain/command.js";
 import { ambiguityText, listingPage, resolveRef, type ListItem } from "../domain/conversation-ref.js";
 import { MANAGEMENT_TEXT as T, info } from "../domain/management-replies.js";
+import { SAVE_TEXT } from "../domain/saved-replies.js";
 import type { ConversationStateStore, PendingAction } from "./conversation-state.js";
 
 export const PENDING_TTL_MS = 5 * 60_000;
@@ -143,6 +144,7 @@ export function createManageSources(deps: ManageSourcesDeps) {
     if (!stored) return null;
     if (stored.expiresAt.getTime() > now().getTime()) return stored.pending;
     await deps.state.clearPending(ctx.userId, ctx.provider);
+    if (stored.pending.action === "forget") return info(SAVE_TEXT.forgetExpired);
     const verb = stored.pending.action === "follow" ? "acompanhar" : "apagar";
     return info(T.expired(`${verb} ${stored.pending.title}`));
   }
@@ -150,6 +152,8 @@ export function createManageSources(deps: ManageSourcesDeps) {
   async function confirm(ctx: ManagementContext): Promise<AgentReply | null> {
     const pending = await livePending(ctx);
     if (!pending || !("action" in pending)) return pending;
+    // "esquece a N" (feature 009) confirma pelo serviço dos guardados, que vem depois na ordem do agente.
+    if (pending.action === "forget") return null;
     if (pending.action === "delete") return info(T.wrongDeleteName(pending.title));
     if (!(await deps.state.takePending(ctx.userId, ctx.provider, pending.ref, now()))) return info(T.expired(`acompanhar ${pending.title}`));
     return followReply(await deps.sources.follow(ctx, pending.ref, channelOf(ctx.provider)), T.followed);
@@ -159,6 +163,7 @@ export function createManageSources(deps: ManageSourcesDeps) {
     const pending = await livePending(ctx);
     if (!pending) return info(T.nothingPending);
     if (!("action" in pending)) return pending;
+    if (pending.action === "forget") return info(T.nothingPending);
     if (pending.action !== "delete" || normalizeText(pending.title) !== normalizeText(name)) return info(T.wrongDeleteName(pending.title));
     if (!(await deps.state.takePending(ctx.userId, ctx.provider, pending.ref, now()))) return info(T.expired(`apagar ${pending.title}`));
     const target = await deps.sources.deletionTarget(ctx, pending.ref);

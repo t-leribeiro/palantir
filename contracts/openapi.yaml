@@ -131,10 +131,23 @@ components:
     FakeAgentRequest:
       type: object
       additionalProperties: false
-      required: [senderAccountId, text]
+      required: [senderAccountId]
+      description: >-
+        Mensagem ao agente. Sem os campos da feature 009, é texto digitado (o comportamento de antes); com eles,
+        simula o encaminhado, a resposta citando, a legenda e o áudio mandado ao agente.
       properties:
         senderAccountId: { type: string, minLength: 1 }
-        text: { type: string, minLength: 1, maxLength: 2000 }
+        text: { type: string, minLength: 1, maxLength: 50000 }
+        messageId: { type: string, minLength: 1, maxLength: 200, description: "Id externo; gerado quando ausente." }
+        kind: { type: string, enum: [text, audio, image, document], default: text }
+        isForwarded: { type: boolean, default: false }
+        quotedMessageId: { type: string, minLength: 1, maxLength: 200 }
+        caption: { type: string, minLength: 1, maxLength: 50000 }
+        audioBase64: { type: string, minLength: 1, maxLength: 23000000, description: "Áudio Ogg, servido pelo fetchMedia do canal de teste." }
+        durationSeconds: { type: number, minimum: 0 }
+      allOf:
+        - if: { properties: { kind: { const: text } } }
+          then: { required: [text] }
     OutboxItem:
       type: object
       additionalProperties: false

@@ -6,7 +6,7 @@ import type { CanonicalMessage, IngestOutcome, InboundHandler } from "../../cont
 import { CONTRACT_VERSION } from "../../contracts/channel/knowledge-channel.js";
 import { validateCanonicalMessage } from "../../platform/contracts/validator.js";
 import { maskPhone, type Clock, type IdGenerator } from "../../shared/index.js";
-import type { DirectKind, GroupInfo, IncomingGroupMessage } from "./provider/provider.js";
+import type { DirectKind, GroupInfo, IncomingGroupMessage, IncomingMedia } from "./provider/provider.js";
 
 /** Rota de um grupo com captura ativa (porta implementada por `sources`, ligada em `src/main`). */
 export interface CaptureRouteRef {
@@ -62,7 +62,8 @@ export function toLiveCanonical(message: IncomingGroupMessage, route: CaptureRou
   };
 }
 
-function audioAttachment(id: string, media: NonNullable<IncomingGroupMessage["media"]>) {
+/** Anexo de áudio anunciado (feature 005), também usado no áudio mandado ao agente (feature 009). */
+export function audioAttachment(id: string, media: IncomingMedia) {
   return {
     id: `${id}:0`,
     mimeType: media.mimeType,

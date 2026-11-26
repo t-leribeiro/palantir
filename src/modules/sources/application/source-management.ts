@@ -6,7 +6,8 @@ import type { AuditChannel, AuditLog } from "./audit.js";
 import { CAPTURE_PROVIDER, type CaptureAdmin, type CaptureRecord, type CaptureRepository, type DirectoryGroup, type GroupDirectory } from "./capture-authorization.js";
 import { importConversationId, type ImportOwner } from "./ensure-import-source.js";
 
-export type ManagedState = "following" | "stopped" | "not_following" | "imported" | "conversation" | "other_account";
+/** `saved` (feature 009, D-15): a fonte Guardados, que só aceita "apagar". */
+export type ManagedState = "following" | "stopped" | "not_following" | "imported" | "conversation" | "other_account" | "saved";
 
 export interface ManagedItem {
   /** `group:<id do grupo>` ou `source:<uuid>`: estável entre listas. */
@@ -20,6 +21,8 @@ export interface SpaceSource {
   readonly id: string;
   readonly title: string;
   readonly conversationId: string;
+  /** Feature 009: `saved` para a fonte Guardados. */
+  readonly kind?: string;
 }
 
 export interface SpaceSourceRepository {
@@ -70,9 +73,13 @@ function groupState(record: CaptureRecord | undefined, mine: ReadonlySet<string>
   return record.revokedAt ? "stopped" : "following";
 }
 
+/** Em ordem de nome; a fonte Guardados vai por último (D-15). */
 function sortItems(items: ManagedItem[]): ManagedItem[] {
-  return items.sort((a, b) => a.title.localeCompare(b.title, "pt-BR") || (a.ref < b.ref ? -1 : 1));
+  const last = (i: ManagedItem) => (i.state === "saved" ? 1 : 0);
+  return items.sort((a, b) => last(a) - last(b) || a.title.localeCompare(b.title, "pt-BR") || (a.ref < b.ref ? -1 : 1));
 }
+
+const sourceState = (s: SpaceSource): ManagedState => (s.kind === "saved" ? "saved" : isImport(s) ? "imported" : "conversation");
 
 export function createSourceManagement(deps: SourceManagementDeps) {
   const now = deps.now ?? (() => new Date());
@@ -106,7 +113,7 @@ export function createSourceManagement(deps: SourceManagementDeps) {
     });
     const sources = [...v.sources.values()]
       .filter((s) => !linked.has(s.id))
-      .map((s): ManagedItem => ({ ref: sourceRef(s.id), title: s.title, state: isImport(s) ? "imported" : "conversation" }));
+      .map((s): ManagedItem => ({ ref: sourceRef(s.id), title: s.title, state: sourceState(s) }));
     return sortItems([...groups, ...sources]);
   }
 

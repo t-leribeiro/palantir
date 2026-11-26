@@ -63,7 +63,7 @@ const count = async (like: string) =>
 beforeAll(async () => {
   db = await startTestDatabase();
   await seedOperator(db.pool);
-  const config = loadConfig({ DATABASE_URL: db.url, LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "agent" });
+  const config = loadConfig({ DATABASE_URL: db.url, PALANTIR_WHATSAPP_BURST_MS: "0", LOG_LEVEL: "error", PALANTIR_WHATSAPP_CAPTURE: "agent" });
   worker = await startWorker(config, { metrics });
   code = (await runLink({ number: "+55 11 98888-7777", owner: OWNER }, db.pool)).code ?? "";
   provider = createSimulatedProvider();
